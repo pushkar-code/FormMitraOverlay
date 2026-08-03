@@ -8,7 +8,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 class FormDetectorService : AccessibilityService() {
 
-    private var lastDetectedPackage: String? = null
+    private var lastTriggeredPackage: String? = null
     private var cooldown = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -20,17 +20,15 @@ class FormDetectorService : AccessibilityService() {
         if (packageName.startsWith("com.android.launcher")) return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            AccessibilityEvent.TYPE_VIEW_FOCUSED,
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-                analyzeWindow(packageName)
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (packageName != lastTriggeredPackage && !cooldown) {
+                    checkForFormAndTrigger(packageName)
+                }
             }
         }
     }
 
-    private fun analyzeWindow(packageName: String) {
-        if (cooldown) return
-
+    private fun checkForFormAndTrigger(packageName: String) {
         val rootNode = try {
             rootInActiveWindow
         } catch (_: Exception) {
@@ -38,14 +36,15 @@ class FormDetectorService : AccessibilityService() {
         } ?: return
 
         val inputCount = countInputFields(rootNode, 0)
+        rootNode.recycle()
 
-        Log.d(TAG, "Package: $packageName, Input fields found: $inputCount")
+        Log.d(TAG, "Window: $packageName, inputs: $inputCount")
 
-        if (inputCount >= 2 && packageName != lastDetectedPackage) {
-            lastDetectedPackage = packageName
+        if (inputCount >= 2) {
+            lastTriggeredPackage = packageName
             cooldown = true
 
-            Log.d(TAG, "FORM DETECTED in $packageName with $inputCount fields")
+            Log.d(TAG, "FORM TRIGGERED: $packageName ($inputCount fields)")
 
             sendBroadcast(Intent(ACTION_FORM_DETECTED).apply {
                 putExtra(EXTRA_PACKAGE_NAME, packageName)
@@ -55,27 +54,15 @@ class FormDetectorService : AccessibilityService() {
 
             android.os.Handler(mainLooper).postDelayed({
                 cooldown = false
-            }, 10000)
+            }, 15000)
         }
-
-        rootNode.recycle()
     }
 
     private fun countInputFields(node: AccessibilityNodeInfo, depth: Int): Int {
-        if (depth > 15) return 0
+        if (depth > 20) return 0
 
         var count = 0
-        val className = node.className?.toString() ?: ""
-
-        val isEditText = className.contains("EditText", ignoreCase = true)
-        val isComposeField = className.contains("ComposeView", ignoreCase = true) ||
-            className.contains("AndroidComposeView", ignoreCase = true)
-        val isEditable = node.isEditable
-        val isTextEntry = className.contains("TextView", ignoreCase = true) && node.isFocusable
-
-        if (isEditText || (isComposeField && isEditable) || isEditable) {
-            count++
-        }
+        if (node.isEditable) count++
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
@@ -89,7 +76,7 @@ class FormDetectorService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.d(TAG, "FormDetectorService connected")
+        Log.d(TAG, "FormDetectorService connected and active")
     }
 
     companion object {
