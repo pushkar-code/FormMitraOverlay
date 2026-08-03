@@ -27,9 +27,7 @@ const NativeOverlay = {
   },
 
   checkPermission(): Promise<boolean> {
-    if (!OverlayModule?.checkPermission) {
-      return Promise.resolve(false);
-    }
+    if (!OverlayModule?.checkPermission) return Promise.resolve(false);
     return OverlayModule.checkPermission();
   },
 
@@ -37,10 +35,17 @@ const NativeOverlay = {
     OverlayModule?.requestPermission?.();
   },
 
+  isAccessibilityEnabled(): Promise<boolean> {
+    if (!OverlayModule?.isAccessibilityEnabled) return Promise.resolve(false);
+    return OverlayModule.isAccessibilityEnabled();
+  },
+
+  openAccessibilitySettings(): void {
+    OverlayModule?.openAccessibilitySettings?.();
+  },
+
   getInstalledFormApps(): Promise<FormApp[]> {
-    if (!OverlayModule?.getInstalledFormApps) {
-      return Promise.resolve([]);
-    }
+    if (!OverlayModule?.getInstalledFormApps) return Promise.resolve([]);
     return OverlayModule.getInstalledFormApps();
   },
 
@@ -57,9 +62,7 @@ const NativeOverlay = {
   },
 
   isShowing(): Promise<boolean> {
-    if (!OverlayModule?.isShowing) {
-      return Promise.resolve(false);
-    }
+    if (!OverlayModule?.isShowing) return Promise.resolve(false);
     return OverlayModule.isShowing();
   },
 

@@ -1,16 +1,14 @@
 package com.formmitraoverlay.overlay
 
-import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.PixelFormat
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -53,26 +51,22 @@ class OverlayModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun getInstalledFormApps(promise: Promise) {
+    fun isAccessibilityEnabled(promise: Promise) {
         val ctx = reactApplicationContext
-        val pm = ctx.packageManager
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            addCategory(Intent.CATEGORY_DEFAULT)
+        val service = ComponentName(ctx, FormDetectorService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(
+            ctx.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )?.contains(service) == true
+        promise.resolve(enabled)
+    }
+
+    @ReactMethod
+    fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        val resolveInfos = pm.queryIntentActivities(intent, 0)
-        val apps = Arguments.createArray()
-        val seen = mutableSetOf<String>()
-        for (info in resolveInfos) {
-            val pkg = info.activityInfo.packageName
-            if (pkg == ctx.packageName || seen.contains(pkg)) continue
-            seen.add(pkg)
-            val appMap = Arguments.createMap().apply {
-                putString("packageName", pkg)
-                putString("appName", info.loadLabel(pm).toString())
-            }
-            apps.pushMap(appMap)
-        }
-        promise.resolve(apps)
+        reactApplicationContext.startActivity(intent)
     }
 
     @ReactMethod
@@ -88,11 +82,13 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     return@runOnUiThread
                 }
 
-                val intent = pm.getLaunchIntentForPackage(targetPackage)
+                val intent = ctx.packageManager.getLaunchIntentForPackage(targetPackage)
                 if (intent != null) {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or
-                        Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                    intent.addFlags(
+                        Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+                    )
                     ctx.startActivity(intent)
                 } else {
                     sendEvent("onOverlayError", "Cannot launch $targetPackage")
@@ -102,9 +98,6 @@ class OverlayModule(reactContext: ReactApplicationContext) :
             }
         }
     }
-
-    private val pm: android.content.pm.PackageManager
-        get() = reactApplicationContext.packageManager
 
     @ReactMethod
     fun showOverlay(data: ReadableMap) {
@@ -124,8 +117,6 @@ class OverlayModule(reactContext: ReactApplicationContext) :
 
                 val dm = ctx.resources.displayMetrics
                 val dp = dm.density
-                val screenHeight = dm.heightPixels
-                val halfHeight = (screenHeight * 0.55).toInt()
 
                 windowManager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
@@ -136,10 +127,6 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                         (12 * dp).toInt(), (10 * dp).toInt(),
                         (12 * dp).toInt(), (8 * dp).toInt()
                     )
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    )
                 }
 
                 val headerRow = LinearLayout(ctx).apply {
@@ -148,7 +135,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                 }
 
                 val dragHandle = TextView(ctx).apply {
-                    text = "⠿"
+                    text = "\u2807"
                     setTextColor(Color.parseColor("#666666"))
                     textSize = 18f
                 }
@@ -159,7 +146,9 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     setTextColor(Color.WHITE)
                     textSize = 15f
                     typeface = Typeface.DEFAULT_BOLD
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    layoutParams = LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                    )
                 }
                 headerRow.addView(title)
 
@@ -169,12 +158,15 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     textSize = 9f
                     typeface = Typeface.DEFAULT_BOLD
                     setBackgroundColor(Color.parseColor("#2222c55e"))
-                    setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+                    setPadding(
+                        (6 * dp).toInt(), (2 * dp).toInt(),
+                        (6 * dp).toInt(), (2 * dp).toInt()
+                    )
                 }
                 headerRow.addView(badge)
 
                 val closeBtn = TextView(ctx).apply {
-                    text = " ✕ "
+                    text = " \u2715 "
                     setTextColor(Color.parseColor("#ff4646"))
                     textSize = 14f
                     typeface = Typeface.DEFAULT_BOLD
@@ -190,7 +182,10 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     setBackgroundColor(Color.parseColor("#18FFFFFF"))
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
-                    ).apply { topMargin = (8 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
+                    ).apply {
+                        topMargin = (8 * dp).toInt()
+                        bottomMargin = (6 * dp).toInt()
+                    }
                 }
                 root.addView(divider)
 
@@ -294,7 +289,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                 root.addView(scrollView)
 
                 val footer = TextView(ctx).apply {
-                    text = "AES-256-GCM | Tap to reveal | Drag ⠿ to move"
+                    text = "AES-256-GCM | Tap to reveal | Drag to move"
                     setTextColor(Color.parseColor("#444444"))
                     textSize = 10f
                     gravity = Gravity.CENTER
