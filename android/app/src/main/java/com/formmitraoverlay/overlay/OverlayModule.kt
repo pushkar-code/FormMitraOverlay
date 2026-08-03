@@ -302,6 +302,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                         WindowManager.LayoutParams.FLAG_SECURE,
                     PixelFormat.TRANSLUCENT
                 ).apply {
@@ -309,7 +310,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     y = 0
                 }
 
-                root.setOnTouchListener { _, event ->
+                dragHandle.setOnTouchListener { _, event ->
                     when (event.action) {
                         MotionEvent.ACTION_DOWN -> {
                             dragStartY = event.rawY
