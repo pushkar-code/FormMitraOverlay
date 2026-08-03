@@ -1,44 +1,44 @@
 package com.formmitraoverlay.overlay
 
-import android.annotation.SuppressLint
+import android.app.ActivityManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.text.method.ScrollingMovementMethod
-import android.util.TypedValue
+import android.util.DisplayMetrics
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.facebook.react.bridge.UiThreadUtil
 import org.json.JSONArray
-import org.json.JSONObject
 
 class OverlayModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
     private var windowManager: WindowManager? = null
-    private var overlayContainer: View? = null
+    private var overlayRoot: View? = null
     private var isOverlayShowing = false
     private var expandedFields = mutableSetOf<Int>()
+    private var isDragging = false
+    private var dragStartY = 0f
+    private var overlayStartY = 0
 
     override fun getName(): String = "OverlayModule"
 
     @ReactMethod
     fun checkPermission(promise: Promise) {
-        val canDraw = Settings.canDrawOverlays(reactApplicationContext)
-        promise.resolve(canDraw)
+        promise.resolve(Settings.canDrawOverlays(reactApplicationContext))
     }
 
     @ReactMethod
@@ -53,6 +53,60 @@ class OverlayModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun getInstalledFormApps(promise: Promise) {
+        val ctx = reactApplicationContext
+        val pm = ctx.packageManager
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            addCategory(Intent.CATEGORY_DEFAULT)
+        }
+        val resolveInfos = pm.queryIntentActivities(intent, 0)
+        val apps = Arguments.createArray()
+        val seen = mutableSetOf<String>()
+        for (info in resolveInfos) {
+            val pkg = info.activityInfo.packageName
+            if (pkg == ctx.packageName || seen.contains(pkg)) continue
+            seen.add(pkg)
+            val appMap = Arguments.createMap().apply {
+                putString("packageName", pkg)
+                putString("appName", info.loadLabel(pm).toString())
+            }
+            apps.pushMap(appMap)
+        }
+        promise.resolve(apps)
+    }
+
+    @ReactMethod
+    fun splitScreen(targetPackage: String) {
+        val ctx = reactApplicationContext
+        val activity = ctx.currentActivity ?: return
+
+        UiThreadUtil.runOnUiThread {
+            try {
+                val moveTaskToBack = activity.moveTaskToBack(true)
+                if (!moveTaskToBack) {
+                    sendEvent("onOverlayError", "Failed to move task to back")
+                    return@runOnUiThread
+                }
+
+                val intent = pm.getLaunchIntentForPackage(targetPackage)
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                    ctx.startActivity(intent)
+                } else {
+                    sendEvent("onOverlayError", "Cannot launch $targetPackage")
+                }
+            } catch (e: Exception) {
+                sendEvent("onOverlayError", "splitScreen failed: ${e.message}")
+            }
+        }
+    }
+
+    private val pm: android.content.pm.PackageManager
+        get() = reactApplicationContext.packageManager
+
+    @ReactMethod
     fun showOverlay(data: ReadableMap) {
         val ctx = reactApplicationContext
 
@@ -63,20 +117,29 @@ class OverlayModule(reactContext: ReactApplicationContext) :
 
         UiThreadUtil.runOnUiThread {
             try {
-                if (isOverlayShowing) {
-                    hideOverlayInternal()
-                }
+                if (isOverlayShowing) hideOverlayInternal()
 
                 val fieldsJson = data.getString("fields") ?: "[]"
                 val fields = parseFields(fieldsJson)
 
+                val dm = ctx.resources.displayMetrics
+                val dp = dm.density
+                val screenHeight = dm.heightPixels
+                val halfHeight = (screenHeight * 0.55).toInt()
+
                 windowManager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                val dp = ctx.resources.displayMetrics.density
 
                 val root = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     setBackgroundColor(Color.parseColor("#CC0C0C18"))
-                    setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
+                    setPadding(
+                        (12 * dp).toInt(), (10 * dp).toInt(),
+                        (12 * dp).toInt(), (8 * dp).toInt()
+                    )
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
                 }
 
                 val headerRow = LinearLayout(ctx).apply {
@@ -84,8 +147,15 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     gravity = Gravity.CENTER_VERTICAL
                 }
 
+                val dragHandle = TextView(ctx).apply {
+                    text = "⠿"
+                    setTextColor(Color.parseColor("#666666"))
+                    textSize = 18f
+                }
+                headerRow.addView(dragHandle)
+
                 val title = TextView(ctx).apply {
-                    text = "Form Mitra"
+                    text = "  Form Mitra"
                     setTextColor(Color.WHITE)
                     textSize = 15f
                     typeface = Typeface.DEFAULT_BOLD
@@ -114,7 +184,6 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     }
                 }
                 headerRow.addView(closeBtn)
-
                 root.addView(headerRow)
 
                 val divider = View(ctx).apply {
@@ -125,7 +194,13 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                 }
                 root.addView(divider)
 
-                val scrollView = ScrollView(ctx)
+                val scrollView = ScrollView(ctx).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+                    )
+                    isVerticalScrollBarEnabled = true
+                }
+
                 val fieldsLayout = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                 }
@@ -134,9 +209,13 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     val fieldRow = LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL
                         setBackgroundColor(Color.parseColor("#0DFFFFFF"))
-                        setPadding((10 * dp).toInt(), (8 * dp).toInt(), (10 * dp).toInt(), (8 * dp).toInt())
+                        setPadding(
+                            (10 * dp).toInt(), (8 * dp).toInt(),
+                            (10 * dp).toInt(), (8 * dp).toInt()
+                        )
                         layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         ).apply { bottomMargin = (6 * dp).toInt() }
                     }
 
@@ -150,7 +229,9 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                         setTextColor(Color.parseColor("#AAAAAA"))
                         textSize = 10f
                         typeface = Typeface.DEFAULT_BOLD
-                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        layoutParams = LinearLayout.LayoutParams(
+                            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                        )
                     }
                     headerLayout.addView(label)
 
@@ -169,7 +250,8 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                         typeface = Typeface.MONOSPACE
                         letterSpacing = 0.05f
                         layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         ).apply { topMargin = (4 * dp).toInt() }
                     }
                     fieldRow.addView(valueText)
@@ -181,9 +263,13 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                             textSize = 9f
                             typeface = Typeface.DEFAULT_BOLD
                             setBackgroundColor(Color.parseColor("#18EF4444"))
-                            setPadding((6 * dp).toInt(), (2 * dp).toInt(), (6 * dp).toInt(), (2 * dp).toInt())
+                            setPadding(
+                                (6 * dp).toInt(), (2 * dp).toInt(),
+                                (6 * dp).toInt(), (2 * dp).toInt()
+                            )
                             layoutParams = LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
                             ).apply { topMargin = (4 * dp).toInt() }
                         }
                         fieldRow.addView(sensitiveBadge)
@@ -205,12 +291,10 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                 }
 
                 scrollView.addView(fieldsLayout)
-                root.addView(scrollView, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-                ))
+                root.addView(scrollView)
 
                 val footer = TextView(ctx).apply {
-                    text = "AES-256-GCM | Tap field to reveal"
+                    text = "AES-256-GCM | Tap to reveal | Drag ⠿ to move"
                     setTextColor(Color.parseColor("#444444"))
                     textSize = 10f
                     gravity = Gravity.CENTER
@@ -227,10 +311,39 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.TOP
+                    y = 0
+                }
+
+                root.setOnTouchListener { _, event ->
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            dragStartY = event.rawY
+                            overlayStartY = params.y
+                            isDragging = true
+                            dragHandle.setTextColor(Color.parseColor("#22c55e"))
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (isDragging) {
+                                val dy = (event.rawY - dragStartY).toInt()
+                                params.y = overlayStartY + dy
+                                try {
+                                    windowManager?.updateViewLayout(root, params)
+                                } catch (_: Exception) {}
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            isDragging = false
+                            dragHandle.setTextColor(Color.parseColor("#666666"))
+                            true
+                        }
+                        else -> false
+                    }
                 }
 
                 windowManager?.addView(root, params)
-                overlayContainer = root
+                overlayRoot = root
                 isOverlayShowing = true
 
                 sendEvent("onOverlayShown", Arguments.createMap().apply {
@@ -251,12 +364,12 @@ class OverlayModule(reactContext: ReactApplicationContext) :
         if (!isOverlayShowing) return
         try {
             val wm = windowManager ?: return
-            val root = overlayContainer ?: return
+            val root = overlayRoot ?: return
             wm.removeView(root)
         } catch (_: Exception) {}
 
         expandedFields.clear()
-        overlayContainer = null
+        overlayRoot = null
         windowManager = null
         isOverlayShowing = false
 
@@ -295,12 +408,14 @@ class OverlayModule(reactContext: ReactApplicationContext) :
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                list.add(OverlayField(
-                    label = obj.optString("label", "Field $i"),
-                    value = obj.optString("value", ""),
-                    source = obj.optString("source", ""),
-                    sensitive = obj.optBoolean("sensitive", false)
-                ))
+                list.add(
+                    OverlayField(
+                        label = obj.optString("label", "Field $i"),
+                        value = obj.optString("value", ""),
+                        source = obj.optString("source", ""),
+                        sensitive = obj.optBoolean("sensitive", false)
+                    )
+                )
             }
         } catch (_: Exception) {}
         return list
