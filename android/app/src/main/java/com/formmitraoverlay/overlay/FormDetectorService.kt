@@ -2,13 +2,13 @@ package com.formmitraoverlay.overlay
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 class FormDetectorService : AccessibilityService() {
 
     private var lastDetectedPackage: String? = null
-    private var editTextCount = 0
     private var cooldown = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -17,7 +17,7 @@ class FormDetectorService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
         if (packageName == "com.android.systemui") return
-        if (packageName == "com.android.launcher") return
+        if (packageName.startsWith("com.android.launcher")) return
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
@@ -37,15 +37,19 @@ class FormDetectorService : AccessibilityService() {
             null
         } ?: return
 
-        editTextCount = countEditTexts(rootNode)
+        val inputCount = countInputFields(rootNode, 0)
 
-        if (editTextCount >= 2 && packageName != lastDetectedPackage) {
+        Log.d(TAG, "Package: $packageName, Input fields found: $inputCount")
+
+        if (inputCount >= 2 && packageName != lastDetectedPackage) {
             lastDetectedPackage = packageName
             cooldown = true
 
+            Log.d(TAG, "FORM DETECTED in $packageName with $inputCount fields")
+
             sendBroadcast(Intent(ACTION_FORM_DETECTED).apply {
                 putExtra(EXTRA_PACKAGE_NAME, packageName)
-                putExtra(EXTRA_FIELD_COUNT, editTextCount)
+                putExtra(EXTRA_FIELD_COUNT, inputCount)
                 setPackage(this@FormDetectorService.packageName)
             })
 
@@ -57,14 +61,25 @@ class FormDetectorService : AccessibilityService() {
         rootNode.recycle()
     }
 
-    private fun countEditTexts(node: AccessibilityNodeInfo): Int {
+    private fun countInputFields(node: AccessibilityNodeInfo, depth: Int): Int {
+        if (depth > 15) return 0
+
         var count = 0
-        if (node.className?.toString()?.contains("EditText") == true) {
+        val className = node.className?.toString() ?: ""
+
+        val isEditText = className.contains("EditText", ignoreCase = true)
+        val isComposeField = className.contains("ComposeView", ignoreCase = true) ||
+            className.contains("AndroidComposeView", ignoreCase = true)
+        val isEditable = node.isEditable
+        val isTextEntry = className.contains("TextView", ignoreCase = true) && node.isFocusable
+
+        if (isEditText || (isComposeField && isEditable) || isEditable) {
             count++
         }
+
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            count += countEditTexts(child)
+            count += countInputFields(child, depth + 1)
             child.recycle()
         }
         return count
@@ -74,9 +89,11 @@ class FormDetectorService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        Log.d(TAG, "FormDetectorService connected")
     }
 
     companion object {
+        private const val TAG = "FormDetector"
         const val ACTION_FORM_DETECTED = "com.formmitraoverlay.FORM_DETECTED"
         const val EXTRA_PACKAGE_NAME = "package_name"
         const val EXTRA_FIELD_COUNT = "field_count"
