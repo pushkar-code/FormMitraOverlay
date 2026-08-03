@@ -12,6 +12,11 @@ export interface OverlayShowData {
   fields: string;
 }
 
+export interface FormApp {
+  packageName: string;
+  appName: string;
+}
+
 export interface OverlayEvent {
   status: string;
 }
@@ -30,6 +35,17 @@ const NativeOverlay = {
 
   requestPermission(): void {
     OverlayModule?.requestPermission?.();
+  },
+
+  getInstalledFormApps(): Promise<FormApp[]> {
+    if (!OverlayModule?.getInstalledFormApps) {
+      return Promise.resolve([]);
+    }
+    return OverlayModule.getInstalledFormApps();
+  },
+
+  splitScreen(targetPackage: string): void {
+    OverlayModule?.splitScreen?.(targetPackage);
   },
 
   showOverlay(data: OverlayShowData): void {
