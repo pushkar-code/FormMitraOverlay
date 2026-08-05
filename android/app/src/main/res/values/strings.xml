@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">FormMitraOverlay</string>
-    <string name="accessibility_service_description">Form Mitra detects when you are filling a form in another app and automatically opens a split-screen with your encrypted document overlay.</string>
+    <string name="app_name">Form Mitra</string>
+    <string name="accessibility_service_description">Form Mitra uses this to detect when you open a form in another app. It counts input fields and notifies you so you can open the encrypted overlay alongside the form.</string>
 </resources>

@@ -49,6 +49,14 @@ export interface EncryptedPayload {
   tag: string;
 }
 
+export interface EncryptedEnvelope {
+  ciphertext: string;
+  iv: string;
+  authTag: string;
+  timestamp: number;
+  version: number;
+}
+
 export async function encrypt(plaintext: string): Promise<EncryptedPayload> {
   const key = await getKey();
   const iv = generateIV();
@@ -88,6 +96,63 @@ export async function decrypt(payload: EncryptedPayload): Promise<string> {
   );
 
   return bytesToString(new Uint8Array(decrypted));
+}
+
+export async function encryptEnvelope(plaintext: string): Promise<EncryptedEnvelope> {
+  const key = await getKey();
+  const iv = generateIV();
+  const data = stringToBytes(plaintext);
+
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: 128 },
+    key,
+    data
+  );
+
+  const fullBuffer = new Uint8Array(encrypted);
+  const ciphertext = fullBuffer.slice(0, fullBuffer.length - 16);
+  const authTag = fullBuffer.slice(fullBuffer.length - 16);
+
+  return {
+    ciphertext: bytesToHex(ciphertext),
+    iv: bytesToHex(iv),
+    authTag: bytesToHex(authTag),
+    timestamp: Date.now(),
+    version: 1,
+  };
+}
+
+export async function decryptEnvelope(envelope: EncryptedEnvelope): Promise<string> {
+  const key = await getKey();
+  const iv = hexToBytes(envelope.iv);
+  const ciphertext = hexToBytes(envelope.ciphertext);
+  const authTag = hexToBytes(envelope.authTag);
+
+  const combined = new Uint8Array(ciphertext.length + authTag.length);
+  combined.set(ciphertext, 0);
+  combined.set(authTag, ciphertext.length);
+
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv, tagLength: 128 },
+    key,
+    combined
+  );
+
+  return bytesToString(new Uint8Array(decrypted));
+}
+
+export async function encryptFieldData(
+  fields: Array<{ label: string; value: string; source: string; sensitive: boolean }>
+): Promise<EncryptedEnvelope> {
+  const plaintext = JSON.stringify(fields);
+  return encryptEnvelope(plaintext);
+}
+
+export async function decryptFieldData(
+  envelope: EncryptedEnvelope
+): Promise<Array<{ label: string; value: string; source: string; sensitive: boolean }>> {
+  const json = await decryptEnvelope(envelope);
+  return JSON.parse(json);
 }
 
 export function maskValue(value: string, visibleChars: number = 4): string {

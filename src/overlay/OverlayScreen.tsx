@@ -7,7 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import NativeOverlay, { OverlayData } from '../native/NativeOverlay';
+import NativeOverlay from '../native/NativeOverlay';
 import {
   encrypt,
   decrypt,

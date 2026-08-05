@@ -12,13 +12,20 @@ export interface OverlayShowData {
   fields: string;
 }
 
-export interface FormApp {
-  packageName: string;
-  appName: string;
-}
-
 export interface OverlayEvent {
   status: string;
+}
+
+export interface PickedFile {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PickFilesResult {
+  files: PickedFile[];
+  count: number;
 }
 
 const NativeOverlay = {
@@ -27,30 +34,14 @@ const NativeOverlay = {
   },
 
   checkPermission(): Promise<boolean> {
-    if (!OverlayModule?.checkPermission) return Promise.resolve(false);
+    if (!OverlayModule?.checkPermission) {
+      return Promise.resolve(false);
+    }
     return OverlayModule.checkPermission();
   },
 
   requestPermission(): void {
     OverlayModule?.requestPermission?.();
-  },
-
-  isAccessibilityEnabled(): Promise<boolean> {
-    if (!OverlayModule?.isAccessibilityEnabled) return Promise.resolve(false);
-    return OverlayModule.isAccessibilityEnabled();
-  },
-
-  openAccessibilitySettings(): void {
-    OverlayModule?.openAccessibilitySettings?.();
-  },
-
-  getInstalledFormApps(): Promise<FormApp[]> {
-    if (!OverlayModule?.getInstalledFormApps) return Promise.resolve([]);
-    return OverlayModule.getInstalledFormApps();
-  },
-
-  splitScreen(targetPackage: string): void {
-    OverlayModule?.splitScreen?.(targetPackage);
   },
 
   showOverlay(data: OverlayShowData): void {
@@ -62,7 +53,9 @@ const NativeOverlay = {
   },
 
   isShowing(): Promise<boolean> {
-    if (!OverlayModule?.isShowing) return Promise.resolve(false);
+    if (!OverlayModule?.isShowing) {
+      return Promise.resolve(false);
+    }
     return OverlayModule.isShowing();
   },
 
@@ -76,6 +69,52 @@ const NativeOverlay = {
 
   onOverlayError(callback: (event: { message: string }) => void) {
     return emitter?.addListener('onOverlayError', callback) ?? { remove: () => {} };
+  },
+
+  startBubbleService(fieldsJson: string): void {
+    OverlayModule?.startBubbleService?.(fieldsJson);
+  },
+
+  showOverlayFromService(fieldsJson: string): void {
+    OverlayModule?.showOverlayFromService?.(fieldsJson);
+  },
+
+  stopBubbleService(): void {
+    OverlayModule?.stopBubbleService?.();
+  },
+
+  isAccessibilityEnabled(): Promise<boolean> {
+    if (!OverlayModule?.isAccessibilityEnabled) return Promise.resolve(false);
+    return OverlayModule.isAccessibilityEnabled();
+  },
+
+  openAccessibilitySettings(): void {
+    OverlayModule?.openAccessibilitySettings?.();
+  },
+
+  refreshNotification(): void {
+    OverlayModule?.refreshNotification?.();
+  },
+
+  pickFile(): Promise<PickedFile> {
+    if (!OverlayModule?.pickFile) {
+      return Promise.reject(new Error('File picker not available'));
+    }
+    return OverlayModule.pickFile();
+  },
+
+  pickFiles(): Promise<PickFilesResult> {
+    if (!OverlayModule?.pickFiles) {
+      return Promise.reject(new Error('File picker not available'));
+    }
+    return OverlayModule.pickFiles();
+  },
+
+  openFileManager(): Promise<boolean> {
+    if (!OverlayModule?.openFileManager) {
+      return Promise.reject(new Error('File manager not available'));
+    }
+    return OverlayModule.openFileManager();
   },
 };
 
