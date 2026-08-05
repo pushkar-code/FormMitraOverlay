@@ -295,6 +295,40 @@ export async function getFileInfo(fileId: string): Promise<StoredFile | null> {
   return manifest.files.find((f) => f.id === fileId) || null;
 }
 
+async function secureDeleteFile(path: string): Promise<void> {
+  try {
+    const stat = await RNFS.stat(path);
+    const size = parseInt(stat.size as any, 10) || 0;
+    if (size > 0 && size <= 5 * 1024 * 1024) {
+      await RNFS.writeFile(path, '0'.repeat(size), 'utf8').catch(() => {});
+    }
+  } catch {}
+  await RNFS.unlink(path).catch(() => {});
+}
+
+export async function deleteDecryptedFile(fileId: string): Promise<boolean> {
+  const entry = activeCache.get(fileId);
+  if (!entry) {
+    return false;
+  }
+  activeCache.delete(fileId);
+  await secureDeleteFile(entry.cachePath);
+  return true;
+}
+
+export async function purgeDecryptedCache(): Promise<number> {
+  let removed = 0;
+  const cacheExists = await RNFS.exists(CACHE_DIR);
+  if (!cacheExists) return 0;
+  const files = await RNFS.readdir(CACHE_DIR);
+  for (const file of files) {
+    await secureDeleteFile(`${CACHE_DIR}/${file}`);
+    removed++;
+  }
+  activeCache.clear();
+  return removed;
+}
+
 export async function clearCache(): Promise<void> {
   const cacheExists = await RNFS.exists(CACHE_DIR);
   if (cacheExists) {

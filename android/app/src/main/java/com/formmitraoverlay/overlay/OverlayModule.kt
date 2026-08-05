@@ -143,6 +143,37 @@ class OverlayModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun openDecryptedFile(path: String, mimeType: String, promise: Promise) {
+        val ctx = reactApplicationContext
+        try {
+            val file = java.io.File(path)
+            if (!file.exists()) {
+                promise.reject("FILE_NOT_FOUND", "Decrypted file not found in temp cache")
+                return
+            }
+
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                ctx,
+                "${ctx.packageName}.fileprovider",
+                file
+            )
+
+            val viewer = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType.ifEmpty { "application/octet-stream" })
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+
+            val chooser = android.content.Intent.createChooser(viewer, "Open Decrypted File")
+            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(chooser)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("OPEN_FAILED", "Failed to open decrypted file: ${e.message}")
+        }
+    }
+
     fun handleActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         when (requestCode) {
             PICK_FILE_REQUEST_CODE -> {
