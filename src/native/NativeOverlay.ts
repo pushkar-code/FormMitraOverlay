@@ -116,6 +116,13 @@ const NativeOverlay = {
     }
     return OverlayModule.openFileManager();
   },
+
+  openDecryptedFile(path: string, mimeType: string): Promise<boolean> {
+    if (!OverlayModule?.openDecryptedFile) {
+      return Promise.reject(new Error('File opener not available'));
+    }
+    return OverlayModule.openDecryptedFile(path, mimeType);
+  },
 };
 
 export default NativeOverlay;

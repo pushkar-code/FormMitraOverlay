@@ -19,7 +19,7 @@ import { generateAndStoreMasterKey } from './src/crypto/keychain';
 import { secureQueue } from './src/crypto/secureQueue';
 import { getPendingCount, clearAllBlobs, getPendingBlobs, StoredEncryptedBlob } from './src/storage/encryptedStore';
 import { checkServerHealth } from './src/network/apiClient';
-import { clearAll, getStorageStats, clearCache, storeFileData } from './src/storage/fileStore';
+import { clearAll, getStorageStats, clearCache, storeFileData, listFiles, removeFile, decryptToCache, deleteDecryptedFile, purgeDecryptedCache, StoredFile } from './src/storage/fileStore';
 
 const SAMPLE_FIELDS = [
   { label: 'Full Name', value: 'Rahul Kumar Singh', source: 'Aadhaar Card', sensitive: false },
@@ -53,8 +53,11 @@ function App() {
   const [pendingBlobs, setPendingBlobs] = useState<StoredEncryptedBlob[]>([]);
   const [selectedBlobs, setSelectedBlobs] = useState<Set<string>>(new Set());
   const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
+  const [sandboxFiles, setSandboxFiles] = useState<StoredFile[]>([]);
+  const [viewingFileId, setViewingFileId] = useState<string | null>(null);
 
   const appState = useRef(AppState.currentState);
+  const viewedFilesRef = useRef<Set<string>>(new Set());
 
   const refreshPermission = async () => {
     const perm = await NativeOverlay.checkPermission();
@@ -84,6 +87,25 @@ function App() {
     } catch {}
   };
 
+  const loadSandboxFiles = async () => {
+    try {
+      const files = await listFiles();
+      setSandboxFiles(files);
+    } catch {}
+  };
+
+  const purgeViewedDecryptedFiles = async () => {
+    if (viewedFilesRef.current.size > 0) {
+      const ids = Array.from(viewedFilesRef.current);
+      viewedFilesRef.current.clear();
+      for (const id of ids) {
+        await deleteDecryptedFile(id);
+      }
+    }
+    await purgeDecryptedCache();
+    await refreshSandboxStats();
+  };
+
   useEffect(() => {
     (async () => {
       await generateAndStoreMasterKey();
@@ -93,6 +115,8 @@ function App() {
       await secureQueue.init();
       await refreshPendingCount();
       await refreshSandboxStats();
+      await loadSandboxFiles();
+      await purgeViewedDecryptedFiles();
 
       NativeOverlay.startBubbleService(JSON.stringify(SAMPLE_FIELDS));
 
@@ -113,6 +137,8 @@ function App() {
           if (enabled) NativeOverlay.refreshNotification();
           await refreshPendingCount();
           await refreshSandboxStats();
+          await loadSandboxFiles();
+          await purgeViewedDecryptedFiles();
           checkServerHealth().then(setServerOnline);
         }
         appState.current = next;
@@ -251,6 +277,45 @@ function App() {
     } catch (error) {
       Alert.alert('Error', 'Failed to open file manager.');
     }
+  };
+
+  const handleViewFile = async (file: StoredFile) => {
+    if (viewingFileId) return;
+
+    setViewingFileId(file.id);
+    try {
+      const cachePath = await decryptToCache(file.id);
+      viewedFilesRef.current.add(file.id);
+      await NativeOverlay.openDecryptedFile(cachePath, file.mimeType);
+    } catch (error: any) {
+      await deleteDecryptedFile(file.id);
+      Alert.alert(
+        'Decrypt Failed',
+        error?.message || 'Could not decrypt and open the file.'
+      );
+    } finally {
+      setViewingFileId(null);
+    }
+  };
+
+  const handleDeleteSandboxFile = async (file: StoredFile) => {
+    Alert.alert(
+      'Delete Encrypted File',
+      `Permanently delete "${file.originalName}" from the private sandbox?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteDecryptedFile(file.id);
+            await removeFile(file.id);
+            await refreshSandboxStats();
+            await loadSandboxFiles();
+          },
+        },
+      ]
+    );
   };
 
   const handleFlushQueue = async () => {
@@ -398,6 +463,44 @@ function App() {
                 {file.name} ({(file.size / 1024).toFixed(1)} KB)
               </Text>
             ))}
+          </View>
+        )}
+
+        {sandboxFiles.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Private Sandbox Files ({sandboxFiles.length})</Text>
+            {sandboxFiles.map((file) => (
+              <View key={file.id} style={styles.sandboxFileRow}>
+                <View style={styles.sandboxFileInfo}>
+                  <Text style={styles.sandboxFileName} numberOfLines={1}>
+                    {file.originalName}
+                  </Text>
+                  <Text style={styles.sandboxFileMeta}>
+                    {(file.size / 1024).toFixed(1)} KB | {file.mimeType}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.sandboxViewBtn, viewingFileId === file.id && styles.btnDisabled]}
+                  onPress={() => handleViewFile(file)}
+                  disabled={viewingFileId !== null}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.sandboxViewText}>
+                    {viewingFileId === file.id ? 'Decrypting...' : 'View'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sandboxDeleteBtn}
+                  onPress={() => handleDeleteSandboxFile(file)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.sandboxDeleteText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <Text style={styles.sandboxHint}>
+              View decrypts to a temp cache and deletes it when you return.
+            </Text>
           </View>
         )}
 
@@ -598,6 +701,28 @@ const styles = StyleSheet.create({
     color: '#f59e0b', fontSize: 12, marginTop: 4,
     fontFamily: 'monospace',
   },
+  sandboxFileRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10,
+    padding: 10, marginBottom: 8,
+  },
+  sandboxFileInfo: { flex: 1, marginRight: 8 },
+  sandboxFileName: {
+    color: '#fff', fontSize: 13, fontWeight: '600', fontFamily: 'monospace',
+  },
+  sandboxFileMeta: { color: '#666', fontSize: 10, marginTop: 2 },
+  sandboxViewBtn: {
+    backgroundColor: '#3b82f6', borderRadius: 8,
+    paddingVertical: 8, paddingHorizontal: 14, marginRight: 8,
+  },
+  sandboxViewText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  sandboxDeleteBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(239,68,68,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  sandboxDeleteText: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
+  sandboxHint: { color: '#555', fontSize: 10, marginTop: 4 },
   btn: {
     backgroundColor: '#2563eb', borderRadius: 12,
     paddingVertical: 16, alignItems: 'center', marginBottom: 12,

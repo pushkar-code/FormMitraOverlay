@@ -21,8 +21,11 @@ import {
   listFiles,
   removeFile,
   getStorageStats,
+  decryptToCache,
+  deleteDecryptedFile,
   StoredFile,
 } from '../storage/fileStore';
+import NativeOverlay from '../native/NativeOverlay';
 import { secureWipe } from '../utils/sanitizer';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -46,6 +49,7 @@ export default function OverlayContent(props: any) {
   const [savingFile, setSavingFile] = useState(false);
   const [storedFiles, setStoredFiles] = useState<StoredFile[]>([]);
   const [fileCount, setFileCount] = useState(0);
+  const [viewingFileId, setViewingFileId] = useState<string | null>(null);
 
   const decryptedRef = useRef<Record<string, string>>({});
   const fieldsDataRef = useRef<EncryptedField[]>([]);
@@ -145,10 +149,25 @@ export default function OverlayContent(props: any) {
 
   const handleDeleteFile = useCallback(async (fileId: string) => {
     try {
+      await deleteDecryptedFile(fileId);
       await removeFile(fileId);
       await loadFileList();
     } catch {}
   }, []);
+
+  const handleViewFile = useCallback(async (file: StoredFile) => {
+    if (viewingFileId) return;
+
+    setViewingFileId(file.id);
+    try {
+      const cachePath = await decryptToCache(file.id);
+      await NativeOverlay.openDecryptedFile(cachePath, file.mimeType);
+    } catch (e) {
+      await deleteDecryptedFile(file.id);
+    } finally {
+      setViewingFileId(null);
+    }
+  }, [viewingFileId]);
 
   const handleToggle = useCallback(
     async (label: string, encryptedValue: EncryptedPayload) => {
@@ -287,6 +306,16 @@ export default function OverlayContent(props: any) {
                   <Text style={styles.fileName} numberOfLines={1}>{file.originalName}</Text>
                   <Text style={styles.fileSize}>{(file.size / 1024).toFixed(1)} KB</Text>
                 </View>
+                <TouchableOpacity
+                  style={[styles.fileViewBtn, viewingFileId === file.id && styles.btnDisabled]}
+                  onPress={() => handleViewFile(file)}
+                  disabled={viewingFileId !== null}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.fileViewText}>
+                    {viewingFileId === file.id ? 'Decrypting...' : 'View'}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.fileDeleteBtn}
                   onPress={() => handleDeleteFile(file.id)}
@@ -507,6 +536,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239,68,68,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  fileViewBtn: {
+    backgroundColor: 'rgba(59,130,246,0.2)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+  },
+  fileViewText: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: '700',
   },
   fileDeleteText: {
     color: '#ef4444',
