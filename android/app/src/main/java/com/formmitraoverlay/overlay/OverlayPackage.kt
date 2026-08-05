@@ -6,11 +6,24 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 class OverlayPackage : ReactPackage {
+    private var moduleInstance: OverlayModule? = null
+
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(OverlayModule(reactContext))
+        val module = OverlayModule(reactContext)
+        moduleInstance = module
+        instance = this
+        return listOf(module)
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
         return emptyList()
+    }
+
+    companion object {
+        private var instance: OverlayPackage? = null
+
+        fun getModule(): OverlayModule? {
+            return instance?.moduleInstance
+        }
     }
 }

@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -27,11 +28,14 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
-
+      <service
+        android:name=".overlay.BubbleService"
+        android:exported="false"
+        android:foregroundServiceType="dataSync" />
       <service
         android:name=".overlay.FormDetectorService"
-        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-        android:exported="false">
+        android:exported="true"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
         <intent-filter>
             <action android:name="android.accessibilityservice.AccessibilityService" />
         </intent-filter>
@@ -39,9 +43,12 @@
             android:name="android.accessibilityservice"
             android:resource="@xml/accessibility_config" />
       </service>
-
       <receiver
-        android:name=".overlay.FormMitraReceiver"
-        android:exported="false" />
+        android:name=".overlay.FormDetectReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="com.formmitraoverlay.FORM_DETECTED" />
+        </intent-filter>
+      </receiver>
     </application>
 </manifest>

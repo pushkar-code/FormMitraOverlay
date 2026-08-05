@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  PanResponder,
+  Alert,
 } from 'react-native';
 import {
   decrypt,
@@ -14,7 +14,16 @@ import {
   maskValue,
   EncryptedPayload,
 } from '../crypto/vault';
-import { getMasterKey } from '../crypto/keychain';
+import { secureQueue } from '../crypto/secureQueue';
+import { storeEncryptedFields } from '../storage/encryptedStore';
+import {
+  storeFileData,
+  listFiles,
+  removeFile,
+  getStorageStats,
+  StoredFile,
+} from '../storage/fileStore';
+import { secureWipe } from '../utils/sanitizer';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -31,8 +40,15 @@ export default function OverlayContent(props: any) {
   const [decrypting, setDecrypting] = useState<Record<string, boolean>>({});
   const [decryptedValues, setDecryptedValues] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState(false);
+  const [encrypted, setEncrypted] = useState(false);
+  const [storing, setStoring] = useState(false);
+  const [savedAsFile, setSavedAsFile] = useState(false);
+  const [savingFile, setSavingFile] = useState(false);
+  const [storedFiles, setStoredFiles] = useState<StoredFile[]>([]);
+  const [fileCount, setFileCount] = useState(0);
 
   const decryptedRef = useRef<Record<string, string>>({});
+  const fieldsDataRef = useRef<EncryptedField[]>([]);
 
   let fields: EncryptedField[] = [];
   try {
@@ -45,13 +61,93 @@ export default function OverlayContent(props: any) {
     fields = [];
   }
 
+  fieldsDataRef.current = fields;
+
+  useEffect(() => {
+    secureQueue.init();
+    loadFileList();
+  }, []);
+
   useEffect(() => {
     return () => {
-      Object.keys(decryptedRef.current).forEach((k) => {
-        (decryptedRef.current as any)[k] = '';
-      });
-      decryptedRef.current = {};
+      secureWipe(decryptedRef);
+      setDecryptedValues({});
+      setExpanded(null);
     };
+  }, []);
+
+  const loadFileList = async () => {
+    try {
+      const files = await listFiles();
+      setStoredFiles(files);
+      setFileCount(files.length);
+    } catch {}
+  };
+
+  const handleEncryptAndStore = useCallback(async () => {
+    if (fields.length === 0 || storing) return;
+
+    setStoring(true);
+    try {
+      const plainFields: Array<{ label: string; value: string; source: string; sensitive: boolean }> =
+        fields.map((f) => ({
+          label: f.label,
+          value: f.value?.ciphertext ? '[encrypted]' : String(f.value),
+          source: f.source,
+          sensitive: f.sensitive,
+        }));
+
+      await storeEncryptedFields(plainFields);
+      await secureQueue.enqueue(plainFields);
+
+      setEncrypted(true);
+
+      secureWipe(decryptedRef);
+      setDecryptedValues({});
+      setExpanded(null);
+    } catch (e) {
+    } finally {
+      setStoring(false);
+    }
+  }, [fields, storing]);
+
+  const handleSaveAsFile = useCallback(async () => {
+    if (fields.length === 0 || savingFile) return;
+
+    setSavingFile(true);
+    try {
+      const plainFields: Array<{ label: string; value: string; source: string; sensitive: boolean }> =
+        fields.map((f) => ({
+          label: f.label,
+          value: f.value?.ciphertext ? '[encrypted]' : String(f.value),
+          source: f.source,
+          sensitive: f.sensitive,
+        }));
+
+      const jsonData = JSON.stringify(plainFields, null, 2);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fileName = `formmitra_${timestamp}.json`;
+
+      await storeFileData(jsonData, fileName, 'application/json');
+      await loadFileList();
+
+      setSavedAsFile(true);
+      setEncrypted(true);
+
+      secureWipe(decryptedRef);
+      setDecryptedValues({});
+      setExpanded(null);
+    } catch (e) {
+    } finally {
+      setSavingFile(false);
+    }
+  }, [fields, savingFile]);
+
+  const handleDeleteFile = useCallback(async (fileId: string) => {
+    try {
+      await removeFile(fileId);
+      await loadFileList();
+    } catch {}
   }, []);
 
   const handleToggle = useCallback(
@@ -83,6 +179,13 @@ export default function OverlayContent(props: any) {
     },
     [expanded, decryptedValues]
   );
+
+  const handleCollapse = useCallback(() => {
+    secureWipe(decryptedRef);
+    setDecryptedValues({});
+    setExpanded(null);
+    setCollapsed(true);
+  }, []);
 
   const getMaskedDisplay = (field: EncryptedField): string => {
     const raw = decryptedValues[field.label] || '';
@@ -128,8 +231,10 @@ export default function OverlayContent(props: any) {
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Form Mitra</Text>
           <Text style={styles.badge}>ENCRYPTED</Text>
+          {encrypted && <Text style={styles.storedBadge}>STORED</Text>}
+          {savedAsFile && <Text style={styles.fileBadge}>FILE</Text>}
         </View>
-        <TouchableOpacity onPress={() => setCollapsed(true)} style={styles.collapseBtn}>
+        <TouchableOpacity onPress={handleCollapse} style={styles.collapseBtn}>
           <Text style={styles.collapseBtnText}>_</Text>
         </TouchableOpacity>
       </View>
@@ -172,9 +277,55 @@ export default function OverlayContent(props: any) {
         })}
       </View>
 
+      {storedFiles.length > 0 && (
+        <View style={styles.filesSection}>
+          <Text style={styles.filesTitle}>Private Sandbox ({fileCount} files)</Text>
+          <View style={styles.fileList}>
+            {storedFiles.slice(-3).map((file) => (
+              <View key={file.id} style={styles.fileItem}>
+                <View style={styles.fileInfo}>
+                  <Text style={styles.fileName} numberOfLines={1}>{file.originalName}</Text>
+                  <Text style={styles.fileSize}>{(file.size / 1024).toFixed(1)} KB</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.fileDeleteBtn}
+                  onPress={() => handleDeleteFile(file.id)}
+                >
+                  <Text style={styles.fileDeleteText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.encryptBtn, storing && styles.btnDisabled]}
+          onPress={handleEncryptAndStore}
+          disabled={storing || encrypted}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.encryptBtnText}>
+            {storing ? 'Encrypting...' : encrypted ? 'Encrypted & Queued' : 'Encrypt & Queue'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.fileBtn, savingFile && styles.btnDisabled]}
+          onPress={handleSaveAsFile}
+          disabled={savingFile}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.fileBtnText}>
+            {savingFile ? 'Saving...' : 'Save to Private Sandbox'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          AES-256-GCM | Tap to reveal | Swipe down to collapse
+          AES-256-GCM | Sandbox: encrypted at rest | Cache: temporary decrypt
         </Text>
       </View>
     </View>
@@ -186,7 +337,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(12, 12, 24, 0.95)',
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
-    maxHeight: Dimensions.get('window').height * 0.7,
+    maxHeight: Dimensions.get('window').height * 0.75,
     width: SCREEN_WIDTH,
     elevation: 9999,
   },
@@ -201,18 +352,42 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   title: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
   },
+  subtitle: {
+    color: '#666',
+    fontSize: 12,
+  },
   badge: {
     color: '#22c55e',
     fontSize: 9,
     fontWeight: '700',
     backgroundColor: 'rgba(34,197,94,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  storedBadge: {
+    color: '#3b82f6',
+    fontSize: 9,
+    fontWeight: '700',
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  fileBadge: {
+    color: '#f59e0b',
+    fontSize: 9,
+    fontWeight: '700',
+    backgroundColor: 'rgba(245,158,11,0.15)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -233,6 +408,7 @@ const styles = StyleSheet.create({
   },
   body: {
     padding: 12,
+    paddingBottom: 4,
   },
   fieldRow: {
     backgroundColor: 'rgba(255,255,255,0.04)',
@@ -285,6 +461,91 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 9,
     fontWeight: '700',
+  },
+  filesSection: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  filesTitle: {
+    color: '#888',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  fileList: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 8,
+    padding: 8,
+  },
+  fileItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  fileInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  fileName: {
+    color: '#ccc',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  fileSize: {
+    color: '#666',
+    fontSize: 9,
+    marginTop: 2,
+  },
+  fileDeleteBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239,68,68,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileDeleteText: {
+    color: '#ef4444',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  actionRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  encryptBtn: {
+    backgroundColor: 'rgba(34,197,94,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.4)',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  encryptBtnText: {
+    color: '#22c55e',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fileBtn: {
+    backgroundColor: 'rgba(245,158,11,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.4)',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  fileBtnText: {
+    color: '#f59e0b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  btnDisabled: {
+    opacity: 0.5,
   },
   footer: {
     padding: 10,

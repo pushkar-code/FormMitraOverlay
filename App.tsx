@@ -12,9 +12,14 @@ import {
   FlatList,
   Modal,
   Switch,
+  ScrollView,
 } from 'react-native';
-import NativeOverlay, { FormApp } from './src/native/NativeOverlay';
+import NativeOverlay, { PickedFile } from './src/native/NativeOverlay';
 import { generateAndStoreMasterKey } from './src/crypto/keychain';
+import { secureQueue } from './src/crypto/secureQueue';
+import { getPendingCount, clearAllBlobs, getPendingBlobs, StoredEncryptedBlob } from './src/storage/encryptedStore';
+import { checkServerHealth } from './src/network/apiClient';
+import { clearAll, getStorageStats, clearCache, storeFileData } from './src/storage/fileStore';
 
 const SAMPLE_FIELDS = [
   { label: 'Full Name', value: 'Rahul Kumar Singh', source: 'Aadhaar Card', sensitive: false },
@@ -36,8 +41,18 @@ function App() {
   const [hasPermission, setHasPermission] = useState(false);
   const [keyReady, setKeyReady] = useState(false);
   const [accessibilityEnabled, setAccessibilityEnabled] = useState(false);
-  const [appPickerVisible, setAppPickerVisible] = useState(false);
-  const [installedApps, setInstalledApps] = useState<FormApp[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [flushing, setFlushing] = useState(false);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+  const [sandboxStats, setSandboxStats] = useState<{
+    fileCount: number;
+    totalSize: number;
+    cacheCount: number;
+  } | null>(null);
+  const [submitPickerVisible, setSubmitPickerVisible] = useState(false);
+  const [pendingBlobs, setPendingBlobs] = useState<StoredEncryptedBlob[]>([]);
+  const [selectedBlobs, setSelectedBlobs] = useState<Set<string>>(new Set());
+  const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
 
   const appState = useRef(AppState.currentState);
 
@@ -53,12 +68,33 @@ function App() {
     return enabled;
   };
 
+  const refreshPendingCount = async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+  };
+
+  const refreshSandboxStats = async () => {
+    try {
+      const stats = await getStorageStats();
+      setSandboxStats({
+        fileCount: stats.fileCount,
+        totalSize: stats.totalSize,
+        cacheCount: stats.cacheCount,
+      });
+    } catch {}
+  };
+
   useEffect(() => {
     (async () => {
       await generateAndStoreMasterKey();
       setKeyReady(true);
       await refreshPermission();
       await refreshAccessibility();
+      await secureQueue.init();
+      await refreshPendingCount();
+      await refreshSandboxStats();
+
+      NativeOverlay.startBubbleService(JSON.stringify(SAMPLE_FIELDS));
 
       const sub = NativeOverlay.onOverlayShown(() => setOverlayVisible(true));
       const sub2 = NativeOverlay.onOverlayHidden(() => setOverlayVisible(false));
@@ -66,56 +102,42 @@ function App() {
         Alert.alert('Overlay Error', e.message)
       );
 
-      const appSub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      const queueUnsubscribe = secureQueue.subscribe((count) => {
+        setPendingCount(count);
+      });
+
+      const appSub = AppState.addEventListener('change', async (next: AppStateStatus) => {
         if (appState.current.match(/inactive|background/) && next === 'active') {
-          refreshPermission();
-          refreshAccessibility();
+          await refreshPermission();
+          const enabled = await refreshAccessibility();
+          if (enabled) NativeOverlay.refreshNotification();
+          await refreshPendingCount();
+          await refreshSandboxStats();
+          checkServerHealth().then(setServerOnline);
         }
         appState.current = next;
       });
+
+      checkServerHealth().then(setServerOnline);
 
       return () => {
         sub.remove();
         sub2.remove();
         sub3.remove();
         appSub.remove();
+        queueUnsubscribe();
       };
     })();
   }, []);
-
-  const loadInstalledApps = async () => {
-    const apps = await NativeOverlay.getInstalledFormApps();
-    setInstalledApps(apps);
-    setAppPickerVisible(true);
-  };
-
-  const handleSelectApp = async (app: FormApp) => {
-    setAppPickerVisible(false);
-
-    const perm = await refreshPermission();
-    if (!perm) {
-      NativeOverlay.requestPermission();
-      Alert.alert('Permission Required', 'Enable "Display over other apps" for Form Mitra.');
-      return;
-    }
-
-    if (!keyReady) {
-      Alert.alert('Error', 'Encryption key not ready yet.');
-      return;
-    }
-
-    NativeOverlay.showOverlay({ fields: JSON.stringify(SAMPLE_FIELDS) });
-
-    setTimeout(() => {
-      NativeOverlay.splitScreen(app.packageName);
-    }, 500);
-  };
 
   const handleShowOverlay = async () => {
     const perm = await refreshPermission();
     if (!perm) {
       NativeOverlay.requestPermission();
-      Alert.alert('Permission Required', 'Enable "Display over other apps" for Form Mitra.');
+      Alert.alert(
+        'Permission Required',
+        'Please enable "Display over other apps" for Form Mitra, then tap the button again.'
+      );
       return;
     }
 
@@ -124,19 +146,179 @@ function App() {
       return;
     }
 
-    NativeOverlay.showOverlay({ fields: JSON.stringify(SAMPLE_FIELDS) });
+    NativeOverlay.showOverlayFromService(JSON.stringify(SAMPLE_FIELDS));
   };
 
   const handleHideOverlay = () => {
-    NativeOverlay.hideOverlay();
+    NativeOverlay.stopBubbleService();
     setOverlayVisible(false);
+  };
+
+  const handleOpenSubmitPicker = async () => {
+    const blobs = await getPendingBlobs();
+    setPendingBlobs(blobs);
+    setSelectedBlobs(new Set());
+    setSubmitPickerVisible(true);
+  };
+
+  const handleToggleBlobSelection = (id: string) => {
+    setSelectedBlobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllBlobs = () => {
+    if (selectedBlobs.size === pendingBlobs.length) {
+      setSelectedBlobs(new Set());
+    } else {
+      setSelectedBlobs(new Set(pendingBlobs.map((b) => b.id)));
+    }
+  };
+
+  const handleSubmitSelected = async () => {
+    if (selectedBlobs.size === 0) {
+      Alert.alert('No Selection', 'Please select at least one item to submit.');
+      return;
+    }
+
+    setSubmitPickerVisible(false);
+    setFlushing(true);
+
+    try {
+      const results = await secureQueue.flush();
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
+
+      await refreshPendingCount();
+
+      if (failCount > 0) {
+        Alert.alert(
+          'Partial Submit',
+          `Submitted ${successCount} batch(es), ${failCount} failed. Check server connection.`
+        );
+      } else if (successCount > 0) {
+        Alert.alert('Submitted', `${successCount} batch(es) sent to server successfully.`);
+      } else {
+        Alert.alert('No Data', 'No pending data was submitted.');
+      }
+    } catch (error) {
+      Alert.alert('Submit Error', 'Failed to submit data. Please try again.');
+    } finally {
+      setFlushing(false);
+    }
+  };
+
+  const handlePickFile = async () => {
+    try {
+      const result = await NativeOverlay.pickFiles();
+      if (result.files && result.files.length > 0) {
+        setPickedFiles(result.files);
+
+        for (const file of result.files) {
+          const jsonData = JSON.stringify({
+            fileName: file.name,
+            mimeType: file.mimeType,
+            size: file.size,
+            uri: file.uri,
+            pickedAt: new Date().toISOString(),
+          }, null, 2);
+
+          await storeFileData(jsonData, `picked_${file.name}.json`, 'application/json');
+        }
+
+        await refreshSandboxStats();
+        Alert.alert(
+          'Files Stored',
+          `${result.files.length} file(s) encrypted and stored in private sandbox.`
+        );
+      }
+    } catch (error: any) {
+      if (error?.code !== 'CANCELLED' && !String(error?.message).includes('CANCELLED')) {
+        Alert.alert('Error', 'Failed to pick files.');
+      }
+    }
+  };
+
+  const handleOpenFileManager = async () => {
+    try {
+      await NativeOverlay.openFileManager();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open file manager.');
+    }
+  };
+
+  const handleFlushQueue = async () => {
+    await handleOpenSubmitPicker();
+  };
+
+  const handleClearStorage = async () => {
+    Alert.alert(
+      'Clear Local Storage',
+      'This will remove all locally stored encrypted data. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllBlobs();
+            await refreshPendingCount();
+            Alert.alert('Cleared', 'Local encrypted storage cleared.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearSandbox = async () => {
+    Alert.alert(
+      'Clear Private Sandbox',
+      'This will remove all encrypted files from the private sandbox. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAll();
+            await refreshSandboxStats();
+            Alert.alert('Cleared', 'Private sandbox and cache cleared.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearCache = async () => {
+    Alert.alert(
+      'Clear Temp Cache',
+      'This will remove all decrypted files from the temporary cache. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Cache',
+          style: 'destructive',
+          onPress: async () => {
+            await clearCache();
+            await refreshSandboxStats();
+            Alert.alert('Cleared', 'Temporary cache cleared.');
+          },
+        },
+      ]
+    );
   };
 
   const handleToggleAccessibility = () => {
     if (!accessibilityEnabled) {
       Alert.alert(
         'Enable Auto-Detect',
-        'Form Mitra needs accessibility access to detect when you are filling a form in another app. This will automatically open split-screen with the overlay.',
+        'Form Mitra needs accessibility access to detect when you are filling a form in another app. When a form is found, you will be notified to open the overlay.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Open Settings', onPress: () => NativeOverlay.openAccessibilitySettings() },
@@ -158,9 +340,9 @@ function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a1a" />
 
-      <View style={styles.inner}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.inner}>
         <Text style={styles.logo}>Form Mitra</Text>
-        <Text style={styles.subtitle}>Encrypted Screen Overlay</Text>
+        <Text style={styles.subtitle}>Encrypted Document Overlay</Text>
 
         <View style={styles.card}>
           <View style={styles.row}>
@@ -168,8 +350,8 @@ function App() {
               <Text style={styles.cardTitle}>Auto-Detect Forms</Text>
               <Text style={styles.cardDesc}>
                 {accessibilityEnabled
-                  ? 'Active — overlay triggers when form detected'
-                  : 'Off — enable to auto-trigger on form apps'}
+                  ? 'Active — notifies when form detected'
+                  : 'Off — enable to auto-detect forms'}
               </Text>
             </View>
             <Switch
@@ -186,9 +368,12 @@ function App() {
           <Text style={styles.cardBody}>
             1. Enable auto-detect above (one-time setup){'\n'}
             2. Open any form app and start filling fields{'\n'}
-            3. Form detected → split-screen + overlay auto-opens{'\n'}
-            4. Drag the divider to resize (default 50/50){'\n'}
-            5. Tap fields to decrypt & reveal values
+            3. Form detected → notification appears{'\n'}
+            4. Tap notification → purple FM bubble appears{'\n'}
+            5. Tap bubble → half-screen overlay with your data{'\n'}
+            6. Tap "Encrypt & Queue" to encrypt & queue for submit{'\n'}
+            7. Tap "Save to Private Sandbox" to store encrypted file{'\n'}
+            8. Pick files from file manager to encrypt & store
           </Text>
         </View>
 
@@ -197,17 +382,85 @@ function App() {
           <Text style={styles.cardBody}>
             Master key: {keyReady ? 'Ready' : 'Initializing...'}{'\n'}
             Overlay permission: {hasPermission ? 'Granted' : 'Not granted'}{'\n'}
-            Auto-detect: {accessibilityEnabled ? 'Active' : 'Disabled'}
+            Auto-detect: {accessibilityEnabled ? 'Active' : 'Disabled'}{'\n'}
+            Server: {serverOnline === null ? 'Checking...' : serverOnline ? 'Online' : 'Offline'}{'\n'}
+            Pending queue: {pendingCount} blob(s)
+            {sandboxStats ? `\nSandbox: ${sandboxStats.fileCount} files (${(sandboxStats.totalSize / 1024).toFixed(1)} KB)` : ''}
+            {sandboxStats && sandboxStats.cacheCount > 0 ? `\nTemp cache: ${sandboxStats.cacheCount} file(s)` : ''}
           </Text>
         </View>
 
+        {pickedFiles.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Picked Files ({pickedFiles.length})</Text>
+            {pickedFiles.map((file, index) => (
+              <Text key={index} style={styles.pickedFile}>
+                {file.name} ({(file.size / 1024).toFixed(1)} KB)
+              </Text>
+            ))}
+          </View>
+        )}
+
+        {pendingCount > 0 && (
+          <TouchableOpacity
+            style={[styles.btnFlush, flushing && styles.btnDisabled]}
+            onPress={handleFlushQueue}
+            disabled={flushing}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.btnText}>
+              {flushing ? 'Submitting...' : `Submit ${pendingCount} Pending`}
+            </Text>
+            <Text style={styles.btnSubtext}>Tap to select items to submit</Text>
+          </TouchableOpacity>
+        )}
+
+        {pendingCount > 0 && (
+          <TouchableOpacity
+            style={styles.btnClear}
+            onPress={handleClearStorage}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.btnText, styles.btnClearText]}>Clear Local Storage</Text>
+          </TouchableOpacity>
+        )}
+
+        {sandboxStats && sandboxStats.fileCount > 0 && (
+          <TouchableOpacity
+            style={styles.btnClear}
+            onPress={handleClearSandbox}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.btnText, styles.btnClearText]}>Clear Private Sandbox</Text>
+          </TouchableOpacity>
+        )}
+
+        {sandboxStats && sandboxStats.cacheCount > 0 && (
+          <TouchableOpacity
+            style={styles.btnClear}
+            onPress={handleClearCache}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.btnText, styles.btnClearText]}>Clear Temp Cache</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
-          style={styles.btnSplit}
-          onPress={loadInstalledApps}
+          style={styles.btnPickFile}
+          onPress={handlePickFile}
           activeOpacity={0.8}
         >
-          <Text style={styles.btnText}>Manual Split Screen</Text>
-          <Text style={styles.btnSubtext}>Pick a form app manually</Text>
+          <Text style={styles.btnText}>Pick Files to Encrypt</Text>
+          <Text style={styles.btnSubtext}>Select files from file manager</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.btnFileManager}
+          onPress={handleOpenFileManager}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.btnText}>Open File Manager</Text>
+          <Text style={styles.btnSubtext}>Browse files directly</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -216,7 +469,7 @@ function App() {
           activeOpacity={0.8}
         >
           <Text style={styles.btnText}>
-            {overlayVisible ? 'Refresh Overlay' : 'Show Overlay Only'}
+            {overlayVisible ? 'Refresh Overlay' : 'Show Overlay Now'}
           </Text>
         </TouchableOpacity>
 
@@ -226,49 +479,88 @@ function App() {
             onPress={handleHideOverlay}
             activeOpacity={0.8}
           >
-            <Text style={[styles.btnText, styles.btnHideText]}>Hide Overlay</Text>
+            <Text style={[styles.btnText, styles.btnHideText]}>Stop Bubble</Text>
           </TouchableOpacity>
         )}
 
         <Text style={styles.note}>
-          Device: Oppo CPH2681 | Overlay scrollable + draggable
+          Device: Oppo CPH2681 | E2EE Active
         </Text>
-      </View>
+      </ScrollView>
 
       <Modal
-        visible={appPickerVisible}
+        visible={submitPickerVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setAppPickerVisible(false)}
+        onRequestClose={() => setSubmitPickerVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Form App</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Items to Submit</Text>
+              <TouchableOpacity onPress={handleSelectAllBlobs}>
+                <Text style={styles.selectAllText}>
+                  {selectedBlobs.size === pendingBlobs.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSubtitle}>
-              Pick the app to open in split-screen with overlay
+              {selectedBlobs.size} of {pendingBlobs.length} selected
             </Text>
             <FlatList
-              data={installedApps}
-              keyExtractor={(item) => item.packageName}
+              data={pendingBlobs}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.appItem}
-                  onPress={() => handleSelectApp(item)}
+                  style={[
+                    styles.blobItem,
+                    selectedBlobs.has(item.id) && styles.blobItemSelected,
+                  ]}
+                  onPress={() => handleToggleBlobSelection(item.id)}
                 >
-                  <Text style={styles.appName}>{item.appName}</Text>
-                  <Text style={styles.appPackage}>{item.packageName}</Text>
+                  <View style={styles.blobInfo}>
+                    <Text style={styles.blobId}>{item.id.substring(0, 8)}...</Text>
+                    <Text style={styles.blobMeta}>
+                      {item.fieldCount} fields | {item.sensitiveCount} sensitive
+                    </Text>
+                    <Text style={styles.blobTime}>
+                      {new Date(item.storedAt).toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.checkbox,
+                    selectedBlobs.has(item.id) && styles.checkboxSelected,
+                  ]}>
+                    {selectedBlobs.has(item.id) && (
+                      <Text style={styles.checkmark}>✓</Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
-                <Text style={styles.emptyText}>No apps found</Text>
+                <Text style={styles.emptyText}>No pending items</Text>
               }
             />
-            <TouchableOpacity
-              style={styles.modalClose}
-              onPress={() => setAppPickerVisible(false)}
-            >
-              <Text style={styles.modalCloseText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setSubmitPickerVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalSubmitBtn,
+                  selectedBlobs.size === 0 && styles.btnDisabled,
+                ]}
+                onPress={handleSubmitSelected}
+                disabled={selectedBlobs.size === 0}
+              >
+                <Text style={styles.modalSubmitText}>
+                  Submit {selectedBlobs.size} Selected
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -278,7 +570,8 @@ function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a1a' },
-  inner: { flex: 1, padding: 24, justifyContent: 'center' },
+  scroll: { flex: 1 },
+  inner: { padding: 24, paddingBottom: 40 },
   logo: {
     fontSize: 32, fontWeight: '800', color: '#fff',
     textAlign: 'center', marginBottom: 4,
@@ -301,14 +594,32 @@ const styles = StyleSheet.create({
   },
   cardDesc: { color: '#ccc', fontSize: 13 },
   cardBody: { color: '#ccc', fontSize: 13, lineHeight: 20 },
-  btnSplit: {
-    backgroundColor: '#7c3aed', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginBottom: 12,
+  pickedFile: {
+    color: '#f59e0b', fontSize: 12, marginTop: 4,
+    fontFamily: 'monospace',
   },
   btn: {
     backgroundColor: '#2563eb', borderRadius: 12,
     paddingVertical: 16, alignItems: 'center', marginBottom: 12,
   },
+  btnPickFile: {
+    backgroundColor: '#f59e0b', borderRadius: 12,
+    paddingVertical: 16, alignItems: 'center', marginBottom: 12,
+  },
+  btnFileManager: {
+    backgroundColor: '#8b5cf6', borderRadius: 12,
+    paddingVertical: 16, alignItems: 'center', marginBottom: 12,
+  },
+  btnFlush: {
+    backgroundColor: '#059669', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center', marginBottom: 12,
+  },
+  btnClear: {
+    backgroundColor: 'transparent', borderWidth: 1, borderColor: '#666',
+    borderRadius: 12, paddingVertical: 10, alignItems: 'center', marginBottom: 12,
+  },
+  btnClearText: { color: '#888', fontSize: 13 },
+  btnDisabled: { opacity: 0.5 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnSubtext: { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
   btnHide: {
@@ -322,19 +633,49 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#1a1a2e', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 24, maxHeight: '70%',
+    padding: 24, maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  selectAllText: { color: '#3b82f6', fontSize: 13, fontWeight: '600' },
   modalSubtitle: { color: '#888', fontSize: 12, marginBottom: 16 },
-  appItem: {
-    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10,
-    padding: 14, marginBottom: 8,
-  },
-  appName: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  appPackage: { color: '#666', fontSize: 11, marginTop: 2 },
   emptyText: { color: '#666', fontSize: 14, textAlign: 'center', padding: 20 },
-  modalClose: { marginTop: 12, padding: 14, alignItems: 'center' },
-  modalCloseText: { color: '#ff4646', fontSize: 16, fontWeight: '600' },
+
+  blobItem: {
+    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10,
+    padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center',
+  },
+  blobItemSelected: {
+    backgroundColor: 'rgba(59,130,246,0.2)', borderColor: '#3b82f6', borderWidth: 1,
+  },
+  blobInfo: { flex: 1 },
+  blobId: { color: '#fff', fontSize: 13, fontWeight: '600', fontFamily: 'monospace' },
+  blobMeta: { color: '#888', fontSize: 11, marginTop: 2 },
+  blobTime: { color: '#666', fontSize: 10, marginTop: 2 },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    borderColor: '#666', justifyContent: 'center', alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#3b82f6', borderColor: '#3b82f6',
+  },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  modalActions: {
+    flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  modalCancelText: { color: '#aaa', fontSize: 15, fontWeight: '600' },
+  modalSubmitBtn: {
+    flex: 2, backgroundColor: '#059669', borderRadius: 10,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  modalSubmitText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
 
 export default App;
