@@ -2,7 +2,7 @@
 
 **E2E-encrypted floating overlay that helps you fill out forms in any other app.** When you open a form elsewhere on your phone, StrongHold detects it, shows a persistent notification + a draggable bubble, and gives you a half-screen overlay of your stored personal fields — masked until you tap to reveal, and encrypted at rest with AES-256-GCM.
 
-> **Android only.** The entire overlay layer (floating bubble, half-screen overlay, accessibility detection, foreground service) is implemented as custom **Kotlin/Android** native code. There is **no iOS implementation** of the overlay module, so the app does not run on iOS even though the RN template's `ios/` folder exists.
+> **Android only.** The entire overlay layer (floating bubble, half-screen overlay, accessibility detection, foreground service) is implemented as custom **Kotlin/Android** native code. There is **no iOS implementation** of the overlay module; all iOS template files have been removed from this repo, and the app does not run on iOS.
 
 - Branch: `StrongHold`
 - Package / applicationId: `com.stronghold`
@@ -166,7 +166,7 @@ src/
   overlay/ OverlayContent.tsx OverlayScreen.tsx
   utils/   sanitizer.ts
 android/                 Gradle project, Kotlin overlay/services/manifest
-ios/                     RN template leftovers — NOT supported
+-                        (iOS removed — not supported)
 ```
 
 ---
