@@ -47,7 +47,7 @@
         android:name=".overlay.FormDetectReceiver"
         android:exported="true">
         <intent-filter>
-            <action android:name="com.formmitraoverlay.FORM_DETECTED" />
+            <action android:name="com.stronghold.FORM_DETECTED" />
         </intent-filter>
       </receiver>
       <provider

@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Form Mitra</string>
-    <string name="accessibility_service_description">Form Mitra uses this to detect when you open a form in another app. It counts input fields and notifies you so you can open the encrypted overlay alongside the form.</string>
+    <string name="app_name">StrongHold</string>
+    <string name="accessibility_service_description">StrongHold uses this to detect when you open a form in another app. It counts input fields and notifies you so you can open the encrypted overlay alongside the form.</string>
 </resources>

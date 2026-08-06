@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "FormMitraOverlay.app"
-               BlueprintName = "FormMitraOverlay"
-               ReferencedContainer = "container:FormMitraOverlay.xcodeproj">
+               BuildableName = "StrongHold.app"
+               BlueprintName = "StrongHold"
+               ReferencedContainer = "container:StrongHold.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "FormMitraOverlayTests.xctest"
-               BlueprintName = "FormMitraOverlayTests"
-               ReferencedContainer = "container:FormMitraOverlay.xcodeproj">
+               BuildableName = "StrongHoldTests.xctest"
+               BlueprintName = "StrongHoldTests"
+               ReferencedContainer = "container:StrongHold.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "FormMitraOverlay.app"
-            BlueprintName = "FormMitraOverlay"
-            ReferencedContainer = "container:FormMitraOverlay.xcodeproj">
+            BuildableName = "StrongHold.app"
+            BlueprintName = "StrongHold"
+            ReferencedContainer = "container:StrongHold.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "FormMitraOverlay.app"
-            BlueprintName = "FormMitraOverlay"
-            ReferencedContainer = "container:FormMitraOverlay.xcodeproj">
+            BuildableName = "StrongHold.app"
+            BlueprintName = "StrongHold"
+            ReferencedContainer = "container:StrongHold.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

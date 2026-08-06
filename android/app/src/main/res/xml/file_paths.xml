@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="cache_root" path="." />
-    <cache-path name="formmitra_cache" path="formmitra_cache/" />
+    <cache-path name="stronghold_cache" path="stronghold_cache/" />
 </paths>

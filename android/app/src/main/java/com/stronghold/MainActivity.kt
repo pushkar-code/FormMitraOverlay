@@ -1,4 +1,4 @@
-package com.formmitraoverlay
+package com.stronghold
 
 import android.content.Intent
 import android.os.Bundle
@@ -6,15 +6,15 @@ import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-import com.formmitraoverlay.overlay.BubbleService
-import com.formmitraoverlay.overlay.FormDetectReceiver
-import com.formmitraoverlay.overlay.OverlayPackage
+import com.stronghold.overlay.BubbleService
+import com.stronghold.overlay.FormDetectReceiver
+import com.stronghold.overlay.OverlayPackage
 import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : ReactActivity() {
 
-  override fun getMainComponentName(): String = "FormMitraOverlay"
+  override fun getMainComponentName(): String = "StrongHold"
 
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)

@@ -162,7 +162,7 @@ function App() {
       NativeOverlay.requestPermission();
       Alert.alert(
         'Permission Required',
-        'Please enable "Display over other apps" for Form Mitra, then tap the button again.'
+        'Please enable "Display over other apps" for StrongHold, then tap the button again.'
       );
       return;
     }
@@ -383,7 +383,7 @@ function App() {
     if (!accessibilityEnabled) {
       Alert.alert(
         'Enable Auto-Detect',
-        'Form Mitra needs accessibility access to detect when you are filling a form in another app. When a form is found, you will be notified to open the overlay.',
+        'StrongHold needs accessibility access to detect when you are filling a form in another app. When a form is found, you will be notified to open the overlay.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Open Settings', onPress: () => NativeOverlay.openAccessibilitySettings() },
@@ -392,7 +392,7 @@ function App() {
     } else {
       Alert.alert(
         'Disable Auto-Detect',
-        'Go to Settings → Accessibility → Form Mitra and toggle it off.',
+        'Go to Settings → Accessibility → StrongHold and toggle it off.',
         [
           { text: 'OK' },
           { text: 'Open Settings', onPress: () => NativeOverlay.openAccessibilitySettings() },
@@ -406,7 +406,7 @@ function App() {
       <StatusBar barStyle="light-content" backgroundColor="#0a0a1a" />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.inner}>
-        <Text style={styles.logo}>Form Mitra</Text>
+        <Text style={styles.logo}>StrongHold</Text>
         <Text style={styles.subtitle}>Encrypted Document Overlay</Text>
 
         <View style={styles.card}>

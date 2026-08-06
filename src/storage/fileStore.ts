@@ -2,7 +2,7 @@ import RNFS from 'react-native-fs';
 import { encryptEnvelope, decryptEnvelope, EncryptedEnvelope } from '../crypto/vault';
 
 const SANDBOX_DIR = `${RNFS.DocumentDirectoryPath}/.sandbox`;
-const CACHE_DIR = `${RNFS.CachesDirectoryPath}/formmitra_cache`;
+const CACHE_DIR = `${RNFS.CachesDirectoryPath}/stronghold_cache`;
 const MANIFEST_FILE = `${SANDBOX_DIR}/manifest.json`;
 
 export interface StoredFile {

@@ -1,4 +1,4 @@
-package com.formmitraoverlay.overlay
+package com.stronghold.overlay
 
 import android.content.ComponentName
 import android.content.Context
@@ -423,7 +423,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
         headerRow.addView(dragHandle)
 
         val title = TextView(ctx).apply {
-            text = "  Form Mitra"
+            text = "  StrongHold"
             setTextColor(Color.WHITE)
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD

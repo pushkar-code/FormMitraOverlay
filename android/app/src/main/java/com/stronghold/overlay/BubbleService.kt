@@ -1,4 +1,4 @@
-package com.formmitraoverlay.overlay
+package com.stronghold.overlay
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -114,21 +114,21 @@ class BubbleService : Service() {
     }
 
     private fun startForegroundWithNotification() {
-        val channelId = "form_mitra_bubble"
+        val channelId = "stronghold_bubble"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "Form Mitra Bubble",
+                "StrongHold Bubble",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps the Form Mitra floating bubble active"
+                description = "Keeps the StrongHold floating bubble active"
                 setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
         }
 
-        val launchIntent = Intent(this, com.formmitraoverlay.MainActivity::class.java)
+        val launchIntent = Intent(this, com.stronghold.MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -145,7 +145,7 @@ class BubbleService : Service() {
         val accessibilityEnabled = isAccessibilityServiceEnabled()
 
         val builder = Notification.Builder(this, channelId)
-            .setContentTitle("Form Mitra")
+            .setContentTitle("StrongHold")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -304,7 +304,7 @@ class BubbleService : Service() {
         headerRow.addView(dragHandle)
 
         val title = TextView(this).apply {
-            text = "  Form Mitra"
+            text = "  StrongHold"
             setTextColor(Color.WHITE)
             textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
@@ -556,12 +556,12 @@ class BubbleService : Service() {
     }
 
     companion object {
-        const val ACTION_SHOW_BUBBLE = "com.formmitraoverlay.SHOW_BUBBLE"
-        const val ACTION_SHOW_OVERLAY = "com.formmitraoverlay.SHOW_OVERLAY"
-        const val ACTION_HIDE_ALL = "com.formmitraoverlay.HIDE_ALL"
-        const val ACTION_REFRESH_NOTIFICATION = "com.formmitraoverlay.REFRESH_NOTIFICATION"
-        const val ACTION_RECREATE_BUBBLE = "com.formmitraoverlay.RECREATE_BUBBLE"
-        const val ACTION_STOP = "com.formmitraoverlay.STOP"
+        const val ACTION_SHOW_BUBBLE = "com.stronghold.SHOW_BUBBLE"
+        const val ACTION_SHOW_OVERLAY = "com.stronghold.SHOW_OVERLAY"
+        const val ACTION_HIDE_ALL = "com.stronghold.HIDE_ALL"
+        const val ACTION_REFRESH_NOTIFICATION = "com.stronghold.REFRESH_NOTIFICATION"
+        const val ACTION_RECREATE_BUBBLE = "com.stronghold.RECREATE_BUBBLE"
+        const val ACTION_STOP = "com.stronghold.STOP"
         const val EXTRA_FIELDS = "fields"
     }
 }

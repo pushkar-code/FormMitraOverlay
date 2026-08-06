@@ -1,4 +1,4 @@
-package com.formmitraoverlay.overlay
+package com.stronghold.overlay
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
@@ -88,7 +88,7 @@ class FormDetectorService : AccessibilityService() {
 
     companion object {
         private const val TAG = "FormDetector"
-        const val ACTION_FORM_DETECTED = "com.formmitraoverlay.FORM_DETECTED"
+        const val ACTION_FORM_DETECTED = "com.stronghold.FORM_DETECTED"
         const val EXTRA_PACKAGE_NAME = "package_name"
         const val EXTRA_FIELD_COUNT = "field_count"
     }

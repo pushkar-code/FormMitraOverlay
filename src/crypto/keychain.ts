@@ -1,6 +1,6 @@
 import * as Keychain from 'react-native-keychain';
 
-const SERVICE_NAME = 'com.formmitraoverlay.vault';
+const SERVICE_NAME = 'com.stronghold.vault';
 const MASTER_KEY_ALIAS = 'master_aes_key';
 
 export async function generateAndStoreMasterKey(): Promise<string> {

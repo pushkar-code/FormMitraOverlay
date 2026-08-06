@@ -105,7 +105,7 @@ export default function OverlayScreen({
       ]}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Form Mitra — Encrypted Overlay</Text>
+        <Text style={styles.title}>StrongHold — Encrypted Overlay</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
           <Text style={styles.closeBtnText}>X</Text>
         </TouchableOpacity>

@@ -1,4 +1,4 @@
-package com.formmitraoverlay.overlay
+package com.stronghold.overlay
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,7 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.formmitraoverlay.MainActivity
+import com.stronghold.MainActivity
 
 class FormDetectReceiver : BroadcastReceiver() {
 
@@ -74,7 +74,7 @@ class FormDetectReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Form Detected in $appLabel")
-            .setContentText("$fieldCount input fields found — tap to open Form Mitra overlay")
+            .setContentText("$fieldCount input fields found — tap to open StrongHold overlay")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText("$fieldCount input fields found in $appLabel.\n\nTap to show your encrypted document overlay alongside $appLabel.")
@@ -90,8 +90,8 @@ class FormDetectReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_SHOW_BUBBLE_ON_DETECT = "com.formmitraoverlay.SHOW_BUBBLE_ON_DETECT"
-        const val ACTION_DISMISS_NOTIFICATION = "com.formmitraoverlay.DISMISS_NOTIFICATION"
+        const val ACTION_SHOW_BUBBLE_ON_DETECT = "com.stronghold.SHOW_BUBBLE_ON_DETECT"
+        const val ACTION_DISMISS_NOTIFICATION = "com.stronghold.DISMISS_NOTIFICATION"
         const val EXTRA_TARGET_PACKAGE = "target_package"
         const val EXTRA_APP_LABEL = "app_label"
         const val EXTRA_FIELD_COUNT = "field_count"

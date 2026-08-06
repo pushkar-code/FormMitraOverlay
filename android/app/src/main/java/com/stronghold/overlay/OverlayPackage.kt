@@ -1,4 +1,4 @@
-package com.formmitraoverlay.overlay
+package com.stronghold.overlay
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

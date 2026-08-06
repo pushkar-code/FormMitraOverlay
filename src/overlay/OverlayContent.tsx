@@ -130,7 +130,7 @@ export default function OverlayContent(props: any) {
 
       const jsonData = JSON.stringify(plainFields, null, 2);
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `formmitra_${timestamp}.json`;
+      const fileName = `stronghold_${timestamp}.json`;
 
       await storeFileData(jsonData, fileName, 'application/json');
       await loadFileList();
@@ -224,7 +224,7 @@ export default function OverlayContent(props: any) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Form Mitra</Text>
+          <Text style={styles.title}>StrongHold</Text>
           <Text style={styles.subtitle}>No data available</Text>
         </View>
       </View>
@@ -238,7 +238,7 @@ export default function OverlayContent(props: any) {
         onPress={() => setCollapsed(false)}
         activeOpacity={0.8}
       >
-        <Text style={styles.collapsedText}>Form Mitra ({fields.length} fields)</Text>
+        <Text style={styles.collapsedText}>StrongHold ({fields.length} fields)</Text>
         <Text style={styles.collapsedHint}>tap to expand</Text>
       </TouchableOpacity>
     );
@@ -248,7 +248,7 @@ export default function OverlayContent(props: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>Form Mitra</Text>
+          <Text style={styles.title}>StrongHold</Text>
           <Text style={styles.badge}>ENCRYPTED</Text>
           {encrypted && <Text style={styles.storedBadge}>STORED</Text>}
           {savedAsFile && <Text style={styles.fileBadge}>FILE</Text>}

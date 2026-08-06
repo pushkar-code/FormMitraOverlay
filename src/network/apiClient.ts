@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://api.formmitra.example.com';
+const API_BASE_URL = 'https://api.stronghold.example.com';
 const API_TIMEOUT_MS = 30000;
 
 export interface SubmissionPayload {

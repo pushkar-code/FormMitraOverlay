@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { encryptEnvelope, decryptEnvelope, EncryptedEnvelope } from '../crypto/vault';
 
-const STORE_PREFIX = '@formmitra_encrypted:';
+const STORE_PREFIX = '@stronghold_encrypted:';
 const QUEUE_KEY = `${STORE_PREFIX}submit_queue`;
 const META_KEY = `${STORE_PREFIX}meta`;
 
