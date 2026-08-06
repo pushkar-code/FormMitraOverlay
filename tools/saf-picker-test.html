@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StrongHold SAF Picker Test</title>
+<style>
+  :root {
+    --bg: #0a0a1a;
+    --card: rgba(255,255,255,0.05);
+    --border: rgba(255,255,255,0.1);
+    --text: #e6e6f0;
+    --muted: #888;
+    --accent: #7c3aed;
+    --ok: #22c55e;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px 60px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=file], .btn {
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  input[type=file] { max-width: 100%; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .result {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    word-break: break-all;
+  }
+  .result .file { margin-bottom: 10px; }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  .muted { color: var(--muted); }
+  .meta { color: var(--muted); font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .badge.bad { background: rgba(239,68,68,0.15); color: var(--bad); }
+  .note { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+  .note code { color: var(--accent); }
+  .steps { margin: 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+
+  <h1>StrongHold SAF Picker Test</h1>
+  <p class="sub">Tests whether decrypted sandbox files are reachable through the Android file picker (DocumentsUI) from a browser.</p>
+
+  <div class="card">
+    <h2>1. Single file input (Chrome on Android)</h2>
+    <p class="meta">Tap the button, then in the picker open the hamburger / "Show roots" and choose <b>StrongHold</b>. Pick a decrypted file.</p>
+    <input type="file" id="single">
+    <div class="result" id="singleResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Multiple files</h2>
+    <input type="file" id="multi" multiple>
+    <div class="result" id="multiResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. MIME filter test</h2>
+    <p class="meta">Only PDF and images are allowed by this input. Does StrongHold show only matching files?</p>
+    <input type="file" id="filtered" accept="application/pdf,image/jpeg,image/png">
+    <div class="result" id="filteredResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. File System Access API (showOpenFilePicker)</h2>
+    <div class="row">
+      <button class="btn" id="pickerBtn" disabled>Opening picker…</button>
+    </div>
+    <div class="result" id="pickerResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>5. Drag &amp; drop (desktop fallback)</h2>
+    <div class="drop" id="drop">Drop files here</div>
+    <div class="result" id="dropResult"></div>
+  </div>
+
+  <div class="note">
+    <b>How to test the StrongHold pull flow:</b>
+    <ol class="steps">
+      <li>In the StrongHold app, tap <b>View</b> (or <b>Attach</b>) on a sandbox file — this decrypts it into the temp cache.</li>
+      <li>Come to this page and open any picker above.</li>
+      <li>In the picker, open the menu (hamburger) &rarr; <b>Show roots</b> &rarr; select <b>StrongHold</b>.</li>
+      <li>Pick the file. The magic-number check below should show a known signature (e.g. <code>%PDF</code>, <code>FF D8 FF</code> for JPEG, <code>89 50 4E 47</code> for PNG) — proving the decrypted bytes arrived intact.</li>
+    </ol>
+    <span class="muted">Remember: the cache is ephemeral (5-min TTL, purged when you return to the StrongHold app).</span>
+  </div>
+
+<script>
+  const magic = [
+    { name: 'PDF', bytes: [0x25, 0x50, 0x44, 0x46], label: '%PDF' },
+    { name: 'JPEG', bytes: [0xFF, 0xD8, 0xFF], label: 'FF D8 FF' },
+    { name: 'PNG', bytes: [0x89, 0x50, 0x4E, 0x47], label: '89 50 4E 47' },
+    { name: 'GIF', bytes: [0x47, 0x49, 0x46], label: 'GIF8' },
+    { name: 'ZIP', bytes: [0x50, 0x4B, 0x03, 0x04], label: 'PK\\x03\\x04' },
+    { name: 'WebP', bytes: [0x52, 0x49, 0x46, 0x46], label: 'RIFF' },
+  ];
+
+  function formatBytes(n) {
+    if (n === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+    return (n / Math.pow(1024, i)).toFixed(i ? 1 : 0) + ' ' + units[i];
+  }
+
+  function hexDump(bytes) {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+      .join(' ');
+  }
+
+  async function magicCheck(file) {
+    const buf = await file.slice(0, 16).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let matched = null;
+    for (const m of magic) {
+      if (m.bytes.every((b, i) => bytes[i] === b)) { matched = m; break; }
+    }
+    return { bytes, matched };
+  }
+
+  function resultHtml(file, check, meta) {
+    const hex = check ? hexDump(check.bytes) : '';
+    const status = check && check.matched
+      ? '<span class="badge ok">MATCH: ' + check.matched.name + '</span>'
+      : '<span class="badge bad">NO MATCH</span>';
+    const path = file.webkitRelativePath ? '<div>relativePath: ' + file.webkitRelativePath + '</div>' : '';
+    return (
+      '<div class="file">' +
+      '<div>' + (file.name || '(no name)') + ' — ' + formatBytes(file.size) + '</div>' +
+      '<div class="meta">type: ' + (file.type || '(none)') + ' · lastModified: ' + new Date(file.lastModified).toLocaleString() + '</div>' +
+      path +
+      (hex ? '<div class="meta">first bytes: ' + hex + '</div>' : '') +
+      status +
+      '</div>'
+    );
+  }
+
+  async function readFile(file, container) {
+    let check = null;
+    try { check = await magicCheck(file); } catch (e) {}
+    container.innerHTML += resultHtml(file, check, true);
+  }
+
+  function wire(inputId, resultId, extra) {
+    const input = document.getElementById(inputId);
+    const result = document.getElementById(resultId);
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      result.innerHTML = '<span class="meta">' + files.length + ' file(s) picked</span>';
+      for (const f of files) await readFile(f, result);
+      input.value = '';
+    });
+  }
+
+  wire('single', 'singleResult');
+  wire('multi', 'multiResult');
+  wire('filtered', 'filteredResult');
+
+  const drop = document.getElementById('drop');
+  const dropResult = document.getElementById('dropResult');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    drop.classList.remove('over');
+    const files = Array.from(e.dataTransfer.files || []);
+    dropResult.innerHTML = '<span class="meta">' + files.length + ' file(s) dropped</span>';
+    for (const f of files) await readFile(f, dropResult);
+  });
+
+  const pickerBtn = document.getElementById('pickerBtn');
+  const pickerResult = document.getElementById('pickerResult');
+  const supports = 'showOpenFilePicker' in window;
+  if (supports) {
+    pickerBtn.textContent = 'Open picker (showOpenFilePicker)';
+    pickerBtn.disabled = false;
+    pickerBtn.addEventListener('click', async () => {
+      pickerResult.innerHTML = '';
+      try {
+        const handles = await window.showOpenFilePicker({ multiple: true });
+        for (const h of handles) {
+          const file = await h.getFile();
+          await readFile(file, pickerResult);
+        }
+      } catch (e) {
+        pickerResult.innerHTML = '<span class="bad">' + (e.name || 'Error') + ': ' + e.message + '</span>';
+      }
+    });
+  } else {
+    pickerBtn.textContent = 'showOpenFilePicker not supported in this browser';
+    pickerResult.innerHTML = '<span class="muted">Use input #1 instead.</span>';
+  }
+</script>
+</body>
+</html>

@@ -174,6 +174,37 @@ class OverlayModule(reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun shareDecryptedFile(path: String, mimeType: String, promise: Promise) {
+        val ctx = reactApplicationContext
+        try {
+            val file = java.io.File(path)
+            if (!file.exists()) {
+                promise.reject("FILE_NOT_FOUND", "Decrypted file not found in temp cache")
+                return
+            }
+
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                ctx,
+                "${ctx.packageName}.fileprovider",
+                file
+            )
+
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = mimeType.ifEmpty { "*/*" }
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            val chooser = android.content.Intent.createChooser(send, "Attach Decrypted File")
+            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(chooser)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SHARE_FAILED", "Failed to attach decrypted file: ${e.message}")
+        }
+    }
+
     fun handleActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         when (requestCode) {
             PICK_FILE_REQUEST_CODE -> {

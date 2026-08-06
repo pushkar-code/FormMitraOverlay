@@ -59,5 +59,16 @@
             android:name="android.support.FILE_PROVIDER_PATHS"
             android:resource="@xml/file_paths" />
       </provider>
+      <provider
+        android:name=".overlay.StrongHoldProvider"
+        android:authorities="${applicationId}.documents"
+        android:exported="true"
+        android:grantUriPermissions="true"
+        android:permission="android.permission.MANAGE_DOCUMENTS"
+        android:label="@string/app_name">
+        <intent-filter>
+            <action android:name="android.content.action.DocumentsProvider" />
+        </intent-filter>
+      </provider>
     </application>
 </manifest>

@@ -169,6 +169,20 @@ export default function OverlayContent(props: any) {
     }
   }, [viewingFileId]);
 
+  const handleShareFile = useCallback(async (file: StoredFile) => {
+    if (viewingFileId) return;
+
+    setViewingFileId(file.id);
+    try {
+      const cachePath = await decryptToCache(file.id);
+      await NativeOverlay.shareDecryptedFile(cachePath, file.mimeType);
+    } catch (e) {
+      await deleteDecryptedFile(file.id);
+    } finally {
+      setViewingFileId(null);
+    }
+  }, [viewingFileId]);
+
   const handleToggle = useCallback(
     async (label: string, encryptedValue: EncryptedPayload) => {
       if (expanded === label) {
@@ -315,6 +329,14 @@ export default function OverlayContent(props: any) {
                   <Text style={styles.fileViewText}>
                     {viewingFileId === file.id ? 'Decrypting...' : 'View'}
                   </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.fileShareBtn, viewingFileId === file.id && styles.btnDisabled]}
+                  onPress={() => handleShareFile(file)}
+                  disabled={viewingFileId !== null}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.fileShareText}>Attach</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.fileDeleteBtn}
@@ -543,6 +565,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginRight: 6,
+  },
+  fileShareBtn: {
+    backgroundColor: 'rgba(5,150,105,0.2)',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+  },
+  fileShareText: {
+    color: '#059669',
+    fontSize: 10,
+    fontWeight: '700',
   },
   fileViewText: {
     color: '#3b82f6',

@@ -14,6 +14,8 @@ import {
   Switch,
   ScrollView,
 } from 'react-native';
+import RNFS from 'react-native-fs';
+import { toByteArray as base64ToBytes } from 'react-native-quick-base64';
 import NativeOverlay, { PickedFile } from './src/native/NativeOverlay';
 import { generateAndStoreMasterKey } from './src/crypto/keychain';
 import { secureQueue } from './src/crypto/secureQueue';
@@ -247,18 +249,18 @@ function App() {
         setPickedFiles(result.files);
 
         for (const file of result.files) {
-          const jsonData = JSON.stringify({
-            fileName: file.name,
-            mimeType: file.mimeType,
-            size: file.size,
-            uri: file.uri,
-            pickedAt: new Date().toISOString(),
-          }, null, 2);
-
-          await storeFileData(jsonData, `picked_${file.name}.json`, 'application/json');
+          const tmpPath = `${RNFS.CachesDirectoryPath}/pick_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          await RNFS.copyFile(file.uri, tmpPath);
+          const base64 = await RNFS.readFile(tmpPath, 'base64');
+          await RNFS.unlink(tmpPath).catch(() => {});
+          const bytes = base64ToBytes(base64);
+          await storeFileData(bytes, file.name, file.mimeType);
         }
 
         await refreshSandboxStats();
+        await loadSandboxFiles();
         Alert.alert(
           'Files Stored',
           `${result.files.length} file(s) encrypted and stored in private sandbox.`
@@ -292,6 +294,25 @@ function App() {
       Alert.alert(
         'Decrypt Failed',
         error?.message || 'Could not decrypt and open the file.'
+      );
+    } finally {
+      setViewingFileId(null);
+    }
+  };
+
+  const handleShareFile = async (file: StoredFile) => {
+    if (viewingFileId) return;
+
+    setViewingFileId(file.id);
+    try {
+      const cachePath = await decryptToCache(file.id);
+      viewedFilesRef.current.add(file.id);
+      await NativeOverlay.shareDecryptedFile(cachePath, file.mimeType);
+    } catch (error: any) {
+      await deleteDecryptedFile(file.id);
+      Alert.alert(
+        'Attach Failed',
+        error?.message || 'Could not decrypt and attach the file.'
       );
     } finally {
       setViewingFileId(null);
@@ -490,6 +511,14 @@ function App() {
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  style={[styles.sandboxShareBtn, viewingFileId === file.id && styles.btnDisabled]}
+                  onPress={() => handleShareFile(file)}
+                  disabled={viewingFileId !== null}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.sandboxShareText}>Attach</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={styles.sandboxDeleteBtn}
                   onPress={() => handleDeleteSandboxFile(file)}
                   activeOpacity={0.8}
@@ -499,7 +528,7 @@ function App() {
               </View>
             ))}
             <Text style={styles.sandboxHint}>
-              View decrypts to a temp cache and deletes it when you return.
+              View/Attach decrypt to a temp cache, shared via SAF/FileProvider and deleted when you return.
             </Text>
           </View>
         )}
@@ -716,6 +745,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 14, marginRight: 8,
   },
   sandboxViewText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  sandboxShareBtn: {
+    backgroundColor: '#059669', borderRadius: 8,
+    paddingVertical: 8, paddingHorizontal: 14, marginRight: 8,
+  },
+  sandboxShareText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   sandboxDeleteBtn: {
     width: 28, height: 28, borderRadius: 14,
     backgroundColor: 'rgba(239,68,68,0.2)',

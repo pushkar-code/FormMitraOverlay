@@ -123,6 +123,13 @@ const NativeOverlay = {
     }
     return OverlayModule.openDecryptedFile(path, mimeType);
   },
+
+  shareDecryptedFile(path: string, mimeType: string): Promise<boolean> {
+    if (!OverlayModule?.shareDecryptedFile) {
+      return Promise.reject(new Error('File sharer not available'));
+    }
+    return OverlayModule.shareDecryptedFile(path, mimeType);
+  },
 };
 
 export default NativeOverlay;
