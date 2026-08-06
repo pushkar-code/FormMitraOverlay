@@ -50,13 +50,13 @@ class MainActivity : ReactActivity() {
       put(JSONObject().apply { put("label", "App Detected"); put("value", appLabel); put("source", "Auto-detect"); put("sensitive", false) })
       put(JSONObject().apply { put("label", "Package"); put("value", targetPackage); put("source", "System"); put("sensitive", false) })
       put(JSONObject().apply { put("label", "Input Fields"); put("value", fieldCount.toString()); put("source", "Accessibility"); put("sensitive", false) })
-      put(JSONObject().apply { put("label", "Full Name"); put("value", "Rahul Kumar Singh"); put("source", "Aadhaar Card"); put("sensitive", false) })
-      put(JSONObject().apply { put("label", "Aadhaar Number"); put("value", "123456789012"); put("source", "Aadhaar Card"); put("sensitive", true) })
-      put(JSONObject().apply { put("label", "Date of Birth"); put("value", "15/08/1995"); put("source", "Aadhaar Card"); put("sensitive", false) })
-      put(JSONObject().apply { put("label", "Phone Number"); put("value", "9876543210"); put("source", "Phone Records"); put("sensitive", true) })
-      put(JSONObject().apply { put("label", "Email"); put("value", "rahul@example.com"); put("source", "Email Records"); put("sensitive", false) })
-      put(JSONObject().apply { put("label", "Father Name"); put("value", "Ram Kumar Singh"); put("source", "Marksheet"); put("sensitive", false) })
-      put(JSONObject().apply { put("label", "Address"); put("value", "Village Rampur, Dist. Lucknow, UP - 226001"); put("source", "Aadhaar Card"); put("sensitive", false) })
+      put(JSONObject().apply { put("label", "Full Name"); put("value", "John Doe"); put("source", "Demo"); put("sensitive", false) })
+      put(JSONObject().apply { put("label", "Aadhaar Number"); put("value", "000000000000"); put("source", "Demo"); put("sensitive", true) })
+      put(JSONObject().apply { put("label", "Date of Birth"); put("value", "01/01/2000"); put("source", "Demo"); put("sensitive", false) })
+      put(JSONObject().apply { put("label", "Phone Number"); put("value", "0000000000"); put("source", "Demo"); put("sensitive", true) })
+      put(JSONObject().apply { put("label", "Email"); put("value", "demo@example.com"); put("source", "Demo"); put("sensitive", false) })
+      put(JSONObject().apply { put("label", "Father Name"); put("value", "Demo Father"); put("source", "Demo"); put("sensitive", false) })
+      put(JSONObject().apply { put("label", "Address"); put("value", "123 Demo Street, Demo City, IN - 000000"); put("source", "Demo"); put("sensitive", false) })
     }
 
     val bubbleIntent = Intent(this, BubbleService::class.java).apply {

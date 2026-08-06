@@ -22,18 +22,18 @@ import { checkServerHealth } from './src/network/apiClient';
 import { clearAll, getStorageStats, clearCache, storeFileData, listFiles, removeFile, decryptToCache, deleteDecryptedFile, purgeDecryptedCache, StoredFile } from './src/storage/fileStore';
 
 const SAMPLE_FIELDS = [
-  { label: 'Full Name', value: 'Rahul Kumar Singh', source: 'Aadhaar Card', sensitive: false },
-  { label: 'Aadhaar Number', value: '123456789012', source: 'Aadhaar Card', sensitive: true },
-  { label: 'Date of Birth', value: '15/08/1995', source: 'Aadhaar Card', sensitive: false },
-  { label: 'Phone Number', value: '9876543210', source: 'Phone Records', sensitive: true },
-  { label: 'Email', value: 'rahul@example.com', source: 'Email Records', sensitive: false },
-  { label: 'Father Name', value: 'Ram Kumar Singh', source: 'Marksheet', sensitive: false },
-  { label: 'Address', value: 'Village Rampur, Dist. Lucknow, UP - 226001', source: 'Aadhaar Card', sensitive: false },
-  { label: 'Mother Name', value: 'Sita Kumar Singh', source: 'Marksheet', sensitive: false },
-  { label: 'Roll Number', value: 'CBSE-2023-12345', source: 'Marksheet', sensitive: false },
-  { label: 'Board', value: 'CBSE', source: 'Marksheet', sensitive: false },
-  { label: 'Percentage', value: '92.4%', source: 'Marksheet', sensitive: false },
-  { label: 'Passport Number', value: 'R1234567', source: 'Passport', sensitive: true },
+  { label: 'Full Name', value: 'John Doe', source: 'Demo', sensitive: false },
+  { label: 'Aadhaar Number', value: '000000000000', source: 'Demo', sensitive: true },
+  { label: 'Date of Birth', value: '01/01/2000', source: 'Demo', sensitive: false },
+  { label: 'Phone Number', value: '0000000000', source: 'Demo', sensitive: true },
+  { label: 'Email', value: 'demo@example.com', source: 'Demo', sensitive: false },
+  { label: 'Father Name', value: 'Demo Father', source: 'Demo', sensitive: false },
+  { label: 'Address', value: '123 Demo Street, Demo City, IN - 000000', source: 'Demo', sensitive: false },
+  { label: 'Mother Name', value: 'Demo Mother', source: 'Demo', sensitive: false },
+  { label: 'Roll Number', value: 'DEMO-2023-00000', source: 'Demo', sensitive: false },
+  { label: 'Board', value: 'DEMO', source: 'Demo', sensitive: false },
+  { label: 'Percentage', value: '00.0%', source: 'Demo', sensitive: false },
+  { label: 'Passport Number', value: 'X0000000', source: 'Demo', sensitive: true },
 ];
 
 function App() {
@@ -587,7 +587,7 @@ function App() {
         )}
 
         <Text style={styles.note}>
-          Device: Oppo CPH2681 | E2EE Active
+          Device: Android | E2EE Active
         </Text>
       </ScrollView>
 
