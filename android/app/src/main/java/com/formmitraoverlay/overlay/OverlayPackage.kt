@@ -12,7 +12,7 @@ class OverlayPackage : ReactPackage {
         val module = OverlayModule(reactContext)
         moduleInstance = module
         instance = this
-        return listOf(module)
+        return listOf(module, DocImageModule(reactContext))
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

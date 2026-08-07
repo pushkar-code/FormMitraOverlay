@@ -450,6 +450,17 @@ class BubbleService : Service() {
             fieldsLayout.addView(fieldRow)
         }
 
+        if (fields.isEmpty()) {
+            val emptyText = TextView(this).apply {
+                text = "No data available"
+                setTextColor(Color.parseColor("#666666"))
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(0, (16 * dp).toInt(), 0, (16 * dp).toInt())
+            }
+            fieldsLayout.addView(emptyText)
+        }
+
         scrollView.addView(fieldsLayout)
         root.addView(scrollView)
 
@@ -509,6 +520,7 @@ class BubbleService : Service() {
             wm.addView(root, params)
             overlayRoot = root
             isOverlayShowing = true
+            LlmCapture.capture(this, fieldsData)
         } catch (_: Exception) {}
     }
 
@@ -563,5 +575,6 @@ class BubbleService : Service() {
         const val ACTION_RECREATE_BUBBLE = "com.formmitraoverlay.RECREATE_BUBBLE"
         const val ACTION_STOP = "com.formmitraoverlay.STOP"
         const val EXTRA_FIELDS = "fields"
+        const val EXTRA_FIELDS_PREFS = "bubble_prefs"
     }
 }

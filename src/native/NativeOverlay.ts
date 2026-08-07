@@ -1,6 +1,6 @@
 import { NativeModules, NativeEventEmitter } from 'react-native';
 
-const { OverlayModule } = NativeModules;
+const { OverlayModule, DocImageModule } = NativeModules;
 
 let emitter: NativeEventEmitter | null = null;
 
@@ -26,6 +26,18 @@ export interface PickedFile {
 export interface PickFilesResult {
   files: PickedFile[];
   count: number;
+}
+
+export interface CachedDocument {
+  cachePath: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PdfPagesResult {
+  pages: string[];
+  pageCount: number;
 }
 
 const NativeOverlay = {
@@ -122,6 +134,31 @@ const NativeOverlay = {
       return Promise.reject(new Error('File opener not available'));
     }
     return OverlayModule.openDecryptedFile(path, mimeType);
+  },
+
+  setLlmCaptureUrl(url: string): void {
+    OverlayModule?.setLlmCaptureUrl?.(url);
+  },
+
+  readToCache(uri: string): Promise<CachedDocument> {
+    if (!DocImageModule?.readToCache) {
+      return Promise.reject(new Error('Document module not available'));
+    }
+    return DocImageModule.readToCache(uri);
+  },
+
+  prepareImage(uri: string, maxWidth: number): Promise<string> {
+    if (!DocImageModule?.prepareImage) {
+      return Promise.reject(new Error('Document module not available'));
+    }
+    return DocImageModule.prepareImage(uri, maxWidth);
+  },
+
+  renderPdfPages(uri: string, maxPages: number, maxWidth: number): Promise<PdfPagesResult> {
+    if (!DocImageModule?.renderPdfPages) {
+      return Promise.reject(new Error('Document module not available'));
+    }
+    return DocImageModule.renderPdfPages(uri, maxPages, maxWidth);
   },
 };
 

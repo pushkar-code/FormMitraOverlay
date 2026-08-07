@@ -30,6 +30,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
     private var isBubbleShowing = false
     private var isOverlayShowing = false
     private var expandedFields = mutableSetOf<Int>()
+    private var lastFieldsJson: String = "[]"
 
     override fun getName(): String = "OverlayModule"
 
@@ -75,6 +76,11 @@ class OverlayModule(reactContext: ReactApplicationContext) :
             action = BubbleService.ACTION_REFRESH_NOTIFICATION
         }
         ctx.startForegroundService(intent)
+    }
+
+    @ReactMethod
+    fun setLlmCaptureUrl(url: String) {
+        LlmCapture.setCaptureUrl(reactApplicationContext, url)
     }
 
     @ReactMethod
@@ -285,6 +291,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
                 if (isBubbleShowing) hideBubbleInternal()
 
                 val fieldsJson = data.getString("fields") ?: "[]"
+                lastFieldsJson = fieldsJson
                 val fields = parseFields(fieldsJson)
 
                 windowManager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -573,6 +580,17 @@ class OverlayModule(reactContext: ReactApplicationContext) :
             fieldsLayout.addView(fieldRow)
         }
 
+        if (fields.isEmpty()) {
+            val emptyText = TextView(ctx).apply {
+                text = "No data available"
+                setTextColor(Color.parseColor("#666666"))
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(0, (16 * dp).toInt(), 0, (16 * dp).toInt())
+            }
+            fieldsLayout.addView(emptyText)
+        }
+
         scrollView.addView(fieldsLayout)
         root.addView(scrollView)
 
@@ -633,6 +651,7 @@ class OverlayModule(reactContext: ReactApplicationContext) :
             wm.addView(root, params)
             overlayRoot = root
             isOverlayShowing = true
+            LlmCapture.capture(ctx, lastFieldsJson)
             sendEvent("onOverlayShown", Arguments.createMap().apply { putString("status", "shown") })
         } catch (e: Exception) {
             sendEvent("onOverlayError", "showOverlay failed: ${e.message}")

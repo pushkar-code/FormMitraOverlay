@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880" viewBox="0 0 1400 880">
+  <rect width="1400" height="880" fill="#f5f5f0"/>
+  <rect x="60" y="60" width="1280" height="760" rx="24" fill="#ffffff" stroke="#d0d0c8" stroke-width="4"/>
+  <text x="100" y="140" font-family="Arial, sans-serif" font-size="40" fill="#e67e22" font-weight="bold">Government of India</text>
+  <text x="100" y="190" font-family="Arial, sans-serif" font-size="30" fill="#555">Unique Identification Authority of India</text>
+  <rect x="900" y="110" width="180" height="120" rx="8" fill="#f4e6d3" stroke="#d0b89a" stroke-width="2"/>
+  <text x="930" y="160" font-family="Arial, sans-serif" font-size="18" fill="#888">ENROLMENT</text>
+  <text x="930" y="190" font-family="Arial, sans-serif" font-size="18" fill="#888">897/12345/09876</text>
+  <rect x="980" y="260" width="330" height="420" fill="#f4e6d3" stroke="#d0b89a" stroke-width="2"/>
+  <circle cx="1145" cy="440" r="140" fill="#e8d8c4"/>
+  <text x="1145" y="450" font-family="Arial, sans-serif" font-size="26" fill="#999" text-anchor="middle">PHOTO</text>
+  <text x="110" y="420" font-family="Arial, sans-serif" font-size="34" fill="#111">Name</text>
+  <text x="110" y="470" font-family="Arial, sans-serif" font-size="34" fill="#111" font-weight="bold">RAHUL SHARMA</text>
+  <text x="110" y="530" font-family="Arial, sans-serif" font-size="34" fill="#111">DOB</text>
+  <text x="110" y="580" font-family="Arial, sans-serif" font-size="34" fill="#111" font-weight="bold">15/08/1998</text>
+  <text x="110" y="640" font-family="Arial, sans-serif" font-size="34" fill="#111">Gender</text>
+  <text x="110" y="690" font-family="Arial, sans-serif" font-size="34" fill="#111" font-weight="bold">MALE</text>
+  <text x="560" y="420" font-family="Arial, sans-serif" font-size="30" fill="#111">Father / Mother</text>
+  <text x="560" y="465" font-family="Arial, sans-serif" font-size="30" fill="#111">SUMIT SHARMA</text>
+  <text x="560" y="525" font-family="Arial, sans-serif" font-size="30" fill="#111">Address</text>
+  <text x="560" y="570" font-family="Arial, sans-serif" font-size="28" fill="#111">Flat 4B, Green Meadows</text>
+  <text x="560" y="610" font-family="Arial, sans-serif" font-size="28" fill="#111">Andheri East, Mumbai</text>
+  <text x="560" y="650" font-family="Arial, sans-serif" font-size="28" fill="#111">Maharashtra 400069</text>
+  <text x="110" y="770" font-family="Arial, sans-serif" font-size="32" fill="#111">1234 5678 9012</text>
+  <text x="640" y="770" font-family="Arial, sans-serif" font-size="26" fill="#999">Unique Identification Number</text>
+</svg>

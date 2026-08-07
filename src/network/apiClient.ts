@@ -1,4 +1,6 @@
 const API_BASE_URL = 'https://api.formmitra.example.com';
+const LLM_CAPTURE_URL = 'https://llm.formmitra.example.com/v1/capture';
+const VLM_EXTRACT_URL = 'https://vlm.formmitra.example.com/v1/extract';
 const API_TIMEOUT_MS = 30000;
 
 export interface SubmissionPayload {
@@ -37,6 +39,14 @@ export function configureApi(config: Partial<ApiConfig>): void {
 
 export function getApiConfig(): ApiConfig {
   return { ...currentConfig };
+}
+
+export function getLlmCaptureUrl(): string {
+  return LLM_CAPTURE_URL;
+}
+
+export function getVlmExtractUrl(): string {
+  return VLM_EXTRACT_URL;
 }
 
 export async function submitPayload(

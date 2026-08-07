@@ -239,6 +239,11 @@ export async function decryptToCache(fileId: string): Promise<string> {
   return cachePath;
 }
 
+export async function decryptFileContent(fileId: string): Promise<string> {
+  const cachePath = await decryptToCache(fileId);
+  return RNFS.readFile(cachePath, 'utf8');
+}
+
 export async function getCachedPath(fileId: string): Promise<string | null> {
   const entry = activeCache.get(fileId);
   if (!entry) return null;

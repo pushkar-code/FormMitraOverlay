@@ -18,23 +18,48 @@ import NativeOverlay, { PickedFile } from './src/native/NativeOverlay';
 import { generateAndStoreMasterKey } from './src/crypto/keychain';
 import { secureQueue } from './src/crypto/secureQueue';
 import { getPendingCount, clearAllBlobs, getPendingBlobs, StoredEncryptedBlob } from './src/storage/encryptedStore';
-import { checkServerHealth } from './src/network/apiClient';
-import { clearAll, getStorageStats, clearCache, storeFileData, listFiles, removeFile, decryptToCache, deleteDecryptedFile, purgeDecryptedCache, StoredFile } from './src/storage/fileStore';
+import { checkServerHealth, getLlmCaptureUrl } from './src/network/apiClient';
+import { clearAll, getStorageStats, clearCache, storeFileData, listFiles, removeFile, decryptFileContent, deleteDecryptedFile, purgeDecryptedCache, StoredFile } from './src/storage/fileStore';
 
-const SAMPLE_FIELDS = [
-  { label: 'Full Name', value: 'John Doe', source: 'Demo', sensitive: false },
-  { label: 'Aadhaar Number', value: '000000000000', source: 'Demo', sensitive: true },
-  { label: 'Date of Birth', value: '01/01/2000', source: 'Demo', sensitive: false },
-  { label: 'Phone Number', value: '0000000000', source: 'Demo', sensitive: true },
-  { label: 'Email', value: 'demo@example.com', source: 'Demo', sensitive: false },
-  { label: 'Father Name', value: 'Demo Father', source: 'Demo', sensitive: false },
-  { label: 'Address', value: '123 Demo Street, Demo City, IN - 000000', source: 'Demo', sensitive: false },
-  { label: 'Mother Name', value: 'Demo Mother', source: 'Demo', sensitive: false },
-  { label: 'Roll Number', value: 'DEMO-2023-00000', source: 'Demo', sensitive: false },
-  { label: 'Board', value: 'DEMO', source: 'Demo', sensitive: false },
-  { label: 'Percentage', value: '00.0%', source: 'Demo', sensitive: false },
-  { label: 'Passport Number', value: 'X0000000', source: 'Demo', sensitive: true },
-];
+interface OverlayField {
+  label: string;
+  value: string;
+  source: string;
+  sensitive: boolean;
+}
+
+const parseFieldsFromJson = (text: string, fileName: string): OverlayField[] => {
+  const source = fileName || 'Decrypted file';
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((item) => item && typeof item === 'object')
+        .map((item, index) => ({
+          label: String(item.label ?? item.key ?? `Field ${index + 1}`),
+          value:
+            item.value && typeof item.value === 'object'
+              ? item.value.ciphertext
+                ? '[encrypted]'
+                : JSON.stringify(item.value)
+              : String(item.value ?? ''),
+          source: String(item.source ?? source),
+          sensitive: !!item.sensitive,
+        }));
+    }
+    if (parsed && typeof parsed === 'object') {
+      return Object.entries(parsed).map(([key, value]) => ({
+        label: key,
+        value: value && typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
+        source,
+        sensitive: false,
+      }));
+    }
+    return [{ label: fileName || 'Content', value: text, source, sensitive: false }];
+  } catch {
+    return [{ label: fileName || 'Content', value: text, source, sensitive: false }];
+  }
+};
 
 function App() {
   const [overlayVisible, setOverlayVisible] = useState(false);
@@ -55,6 +80,7 @@ function App() {
   const [pickedFiles, setPickedFiles] = useState<PickedFile[]>([]);
   const [sandboxFiles, setSandboxFiles] = useState<StoredFile[]>([]);
   const [viewingFileId, setViewingFileId] = useState<string | null>(null);
+  const [overlayFields, setOverlayFields] = useState<OverlayField[]>([]);
 
   const appState = useRef(AppState.currentState);
   const viewedFilesRef = useRef<Set<string>>(new Set());
@@ -118,7 +144,8 @@ function App() {
       await loadSandboxFiles();
       await purgeViewedDecryptedFiles();
 
-      NativeOverlay.startBubbleService(JSON.stringify(SAMPLE_FIELDS));
+      NativeOverlay.startBubbleService(JSON.stringify([]));
+      NativeOverlay.setLlmCaptureUrl(getLlmCaptureUrl());
 
       const sub = NativeOverlay.onOverlayShown(() => setOverlayVisible(true));
       const sub2 = NativeOverlay.onOverlayHidden(() => setOverlayVisible(false));
@@ -172,7 +199,7 @@ function App() {
       return;
     }
 
-    NativeOverlay.showOverlayFromService(JSON.stringify(SAMPLE_FIELDS));
+    NativeOverlay.showOverlayFromService(JSON.stringify(overlayFields));
   };
 
   const handleHideOverlay = () => {
@@ -259,6 +286,8 @@ function App() {
         }
 
         await refreshSandboxStats();
+        await loadSandboxFiles();
+
         Alert.alert(
           'Files Stored',
           `${result.files.length} file(s) encrypted and stored in private sandbox.`
@@ -271,22 +300,17 @@ function App() {
     }
   };
 
-  const handleOpenFileManager = async () => {
-    try {
-      await NativeOverlay.openFileManager();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to open file manager.');
-    }
-  };
-
   const handleViewFile = async (file: StoredFile) => {
     if (viewingFileId) return;
 
     setViewingFileId(file.id);
     try {
-      const cachePath = await decryptToCache(file.id);
+      const content = await decryptFileContent(file.id);
       viewedFilesRef.current.add(file.id);
-      await NativeOverlay.openDecryptedFile(cachePath, file.mimeType);
+      const fields = parseFieldsFromJson(content, file.originalName);
+      setOverlayFields(fields);
+      NativeOverlay.startBubbleService(JSON.stringify(fields));
+      NativeOverlay.showOverlayFromService(JSON.stringify(fields));
     } catch (error: any) {
       await deleteDecryptedFile(file.id);
       Alert.alert(
@@ -558,15 +582,6 @@ function App() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.btnFileManager}
-          onPress={handleOpenFileManager}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.btnText}>Open File Manager</Text>
-          <Text style={styles.btnSubtext}>Browse files directly</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={styles.btn}
           onPress={handleShowOverlay}
           activeOpacity={0.8}
@@ -729,10 +744,6 @@ const styles = StyleSheet.create({
   },
   btnPickFile: {
     backgroundColor: '#f59e0b', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginBottom: 12,
-  },
-  btnFileManager: {
-    backgroundColor: '#8b5cf6', borderRadius: 12,
     paddingVertical: 16, alignItems: 'center', marginBottom: 12,
   },
   btnFlush: {
